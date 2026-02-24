@@ -1,42 +1,37 @@
 import { fetchSquareData } from '../../lib/square'
-import { calculateItem, defaultCategory, defaultSupplier, defaultPack } from '../../lib/calculations'
-import { kvGet, kvSet } from '../../lib/redis'
+import { calculateItem, CATEGORY_ORDER } from '../../lib/calculations'
+import { kvGet } from '../../lib/redis'
 
 export default async function handler(req, res) {
   const token = process.env.SQUARE_ACCESS_TOKEN
-  if (!token) {
-    return res.status(500).json({ error: 'SQUARE_ACCESS_TOKEN not configured' })
-  }
+  if (!token) return res.status(500).json({ error: 'SQUARE_ACCESS_TOKEN not configured' })
 
   try {
-    // Fetch live Square data
-    const squareItems = await fetchSquareData(token)
+    const squareItems  = await fetchSquareData(token)
+    const allSettings  = (await kvGet('itemSettings').catch(() => null)) || {}
+    const targetWeeks  = (await kvGet('targetWeeks').catch(() => null))  || 6
+    const suppliers    = (await kvGet('suppliers').catch(() => null))    || ['Dan Murphys', 'Coles Woolies', 'ACW']
 
-    // Load saved settings
-    let allSettings = {}
-    try {
-      allSettings = (await kvGet('itemSettings')) || {}
-    } catch (e) {
-      // KV not available - use defaults
-      allSettings = {}
-    }
-
-    const targetWeeks = (await kvGet('targetWeeks').catch(() => null)) || 6
-
-    // Merge Square data with settings and calculate
     const items = squareItems.map(item => {
       const settings = allSettings[item.name] || {}
-      return calculateItem(item, settings, targetWeeks)
+      // Apply stock override if set
+      const effectiveItem = settings.stockOverride !== undefined && settings.stockOverride !== null
+        ? { ...item, onHand: settings.stockOverride }
+        : item
+      const calculated = calculateItem(effectiveItem, settings, targetWeeks)
+      return {
+        ...calculated,
+        stockOverride: settings.stockOverride ?? null,
+        notes: settings.notes || '',
+      }
     })
 
-    // Sort by category order then name
-    const { CATEGORY_ORDER } = require('../../lib/calculations')
     items.sort((a, b) => {
       const catDiff = (CATEGORY_ORDER[a.category] ?? 99) - (CATEGORY_ORDER[b.category] ?? 99)
       return catDiff !== 0 ? catDiff : a.name.localeCompare(b.name)
     })
 
-    res.status(200).json({ items, targetWeeks, lastUpdated: new Date().toISOString() })
+    res.status(200).json({ items, targetWeeks, suppliers, lastUpdated: new Date().toISOString() })
   } catch (err) {
     console.error('Items API error:', err)
     res.status(500).json({ error: err.message })
