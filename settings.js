@@ -1,0 +1,217 @@
+const BASE_URL = 'https://connect.squareup.com/v2'
+const DAYS_BACK = 90
+
+const BAR_CATEGORY_KEYWORDS = [
+  'beer', 'wine', 'spirit', 'cider', 'premix', 'sparkling', 'liqueur',
+  'fortified', 'rose', 'soft drink', 'mixer', 'snack', 'chip', 'nut',
+  'beverage', 'alcohol', 'whisky', 'whiskey', 'rum', 'gin', 'vodka',
+  'bourbon', 'brandy', 'champagne', 'seltzer', 'bar snack', 'pre mix'
+]
+
+const SKIP_KEYWORDS = [
+  'ticket', 'raffle', 'dinner', 'lunch', 'bbq', 'burger', 'sausage',
+  'roll', 'sandwich', 'curry', 'pie', 'trivia', 'bingo', 'cruise',
+  'shirt', 'polo', 'sweep', 'event', 'party', 'session', 'music',
+  'aqua', 'hypno', 'fashion', 'yoga', 'exercise', 'strength',
+  'mobility', 'produce', 'account', 'hosting', 'coffee', 'pod', 'token'
+]
+
+function headers(token) {
+  return {
+    'Authorization': `Bearer ${token}`,
+    'Content-Type': 'application/json',
+    'Square-Version': '2024-01-17'
+  }
+}
+
+async function getLocationId(token) {
+  const res = await fetch(`${BASE_URL}/locations`, { headers: headers(token) })
+  const data = await res.json()
+  const active = (data.locations || []).filter(l => l.status === 'ACTIVE')
+  if (!active.length) throw new Error('No active Square locations found')
+  return active[0].id
+}
+
+async function getBarCategoryIds(token) {
+  const res = await fetch(`${BASE_URL}/catalog/list?types=CATEGORY`, { headers: headers(token) })
+  const data = await res.json()
+  const ids = new Set()
+  for (const obj of data.objects || []) {
+    if (obj.type === 'CATEGORY') {
+      const name = (obj.category_data?.name || '').toLowerCase()
+      if (BAR_CATEGORY_KEYWORDS.some(kw => name.includes(kw))) {
+        ids.add(obj.id)
+      }
+    }
+  }
+  return ids
+}
+
+async function getCatalogItems(token, barCategoryIds) {
+  const allItems = {}
+  const variations = {}
+  let cursor = null
+
+  do {
+    const url = `${BASE_URL}/catalog/list?types=ITEM,ITEM_VARIATION${cursor ? `&cursor=${cursor}` : ''}`
+    const res = await fetch(url, { headers: headers(token) })
+    const data = await res.json()
+
+    for (const obj of data.objects || []) {
+      if (obj.type === 'ITEM') {
+        const d = obj.item_data || {}
+        const catIds = new Set()
+        if (d.category_id) catIds.add(d.category_id)
+        for (const c of d.categories || []) if (c.id) catIds.add(c.id)
+        const rc = d.reporting_category
+        if (rc?.id) catIds.add(rc.id)
+        allItems[obj.id] = { name: d.name || 'Unknown', categoryIds: catIds }
+      } else if (obj.type === 'ITEM_VARIATION') {
+        const d = obj.item_variation_data || {}
+        variations[obj.id] = {
+          itemId: d.item_id || '',
+          variationName: d.name || 'Regular',
+          sku: d.sku || '',
+        }
+      }
+    }
+    cursor = data.cursor
+  } while (cursor)
+
+  // Filter by bar categories
+  const filteredItemIds = new Set()
+  for (const [id, item] of Object.entries(allItems)) {
+    const intersection = [...item.categoryIds].filter(x => barCategoryIds.has(x))
+    if (intersection.length > 0) filteredItemIds.add(id)
+  }
+
+  // Build filtered variations with parent names
+  const filtered = {}
+  for (const [varId, v] of Object.entries(variations)) {
+    if (filteredItemIds.has(v.itemId)) {
+      const parentName = allItems[v.itemId]?.name || 'Unknown'
+      const nameLower = parentName.toLowerCase()
+      if (!SKIP_KEYWORDS.some(kw => nameLower.includes(kw))) {
+        filtered[varId] = { ...v, parentName }
+      }
+    }
+  }
+  return filtered
+}
+
+async function getInventoryCounts(token, locationId, variationIds) {
+  const counts = {}
+  const varList = [...variationIds]
+
+  for (let i = 0; i < varList.length; i += 1000) {
+    const chunk = varList.slice(i, i + 1000)
+    const res = await fetch(`${BASE_URL}/inventory/counts/batch-retrieve`, {
+      method: 'POST',
+      headers: headers(token),
+      body: JSON.stringify({
+        catalog_object_ids: chunk,
+        location_ids: [locationId],
+        states: ['IN_STOCK']
+      })
+    })
+    const data = await res.json()
+    for (const count of data.counts || []) {
+      const varId = count.catalog_object_id
+      counts[varId] = (counts[varId] || 0) + parseFloat(count.quantity || 0)
+    }
+  }
+  return counts
+}
+
+async function getSoldQuantities(token, locationId) {
+  const sold = {}
+  const lastSold = {}
+  const startDate = new Date()
+  startDate.setDate(startDate.getDate() - DAYS_BACK)
+  const startStr = startDate.toISOString()
+  let cursor = null
+  let page = 0
+  const MAX_PAGES = 50
+
+  do {
+    page++
+    if (page > MAX_PAGES) break
+
+    const payload = {
+      location_ids: [locationId],
+      types: ['ADJUSTMENT'],
+      updated_after: startStr
+    }
+    if (cursor) payload.cursor = cursor
+
+    const res = await fetch(`${BASE_URL}/inventory/changes/batch-retrieve`, {
+      method: 'POST',
+      headers: headers(token),
+      body: JSON.stringify(payload)
+    })
+    const data = await res.json()
+    const changes = data.changes || []
+    if (!changes.length) break
+
+    for (const change of changes) {
+      const adj = change.adjustment || {}
+      const varId = adj.catalog_object_id
+      if (!varId) continue
+      if (adj.from_state === 'IN_STOCK' && adj.to_state === 'SOLD') {
+        const qty = Math.abs(parseFloat(adj.quantity || 0))
+        sold[varId] = (sold[varId] || 0) + qty
+        if (adj.occurred_at) {
+          const dt = new Date(adj.occurred_at)
+          if (!lastSold[varId] || dt > lastSold[varId]) lastSold[varId] = dt
+        }
+      }
+    }
+    cursor = data.cursor
+  } while (cursor)
+
+  return { sold, lastSold }
+}
+
+export async function fetchSquareData(token) {
+  const locationId = await getLocationId(token)
+  const barCategoryIds = await getBarCategoryIds(token)
+  const catalog = await getCatalogItems(token, barCategoryIds)
+  const inventory = await getInventoryCounts(token, locationId, Object.keys(catalog))
+  const { sold, lastSold } = await getSoldQuantities(token, locationId)
+
+  // Group by item name
+  const itemGroups = {}
+  for (const [varId, v] of Object.entries(catalog)) {
+    const name = v.parentName
+    if (!itemGroups[name]) itemGroups[name] = []
+    itemGroups[name].push({ varId, ...v })
+  }
+
+  // Build item list using Regular variation only for counts
+  const items = []
+  for (const [name, vars] of Object.entries(itemGroups)) {
+    const regularVars = vars.filter(v => v.variationName.toLowerCase() === 'regular' || v.variationName === '')
+    const countVars = regularVars.length ? regularVars : vars
+
+    const onHand = Math.round(countVars.reduce((s, v) => s + (inventory[v.varId] || 0), 0))
+    const totalSold = Math.round(countVars.reduce((s, v) => s + (sold[v.varId] || 0), 0))
+    const weeklyAvg = +(totalSold / 13).toFixed(1)
+
+    let lastSoldDate = null
+    for (const v of countVars) {
+      if (lastSold[v.varId] && (!lastSoldDate || lastSold[v.varId] > lastSoldDate)) {
+        lastSoldDate = lastSold[v.varId]
+      }
+    }
+
+    items.push({
+      name,
+      onHand,
+      soldLast90: totalSold,
+      weeklyAvg,
+      lastSold: lastSoldDate ? lastSoldDate.toISOString().split('T')[0] : null,
+    })
+  }
+
+  return items.sort((a, b) => a.name.localeCompare(b.name))
+}

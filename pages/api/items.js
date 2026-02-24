@@ -1,6 +1,6 @@
 import { fetchSquareData } from '../../lib/square'
 import { calculateItem, defaultCategory, defaultSupplier, defaultPack } from '../../lib/calculations'
-import { kv } from '@vercel/kv'
+import { kvGet, kvSet } from '../../lib/redis'
 
 export default async function handler(req, res) {
   const token = process.env.SQUARE_ACCESS_TOKEN
@@ -15,13 +15,13 @@ export default async function handler(req, res) {
     // Load saved settings
     let allSettings = {}
     try {
-      allSettings = (await kv.get('itemSettings')) || {}
+      allSettings = (await kvGet('itemSettings')) || {}
     } catch (e) {
       // KV not available - use defaults
       allSettings = {}
     }
 
-    const targetWeeks = (await kv.get('targetWeeks').catch(() => null)) || 6
+    const targetWeeks = (await kvGet('targetWeeks').catch(() => null)) || 6
 
     // Merge Square data with settings and calculate
     const items = squareItems.map(item => {

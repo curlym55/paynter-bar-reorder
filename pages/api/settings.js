@@ -1,10 +1,10 @@
-import { kv } from '@vercel/kv'
+import { kvGet, kvSet } from '../../lib/redis'
 
 export default async function handler(req, res) {
   if (req.method === 'GET') {
     try {
-      const settings = (await kv.get('itemSettings')) || {}
-      const targetWeeks = (await kv.get('targetWeeks')) || 6
+      const settings = (await kvGet('itemSettings')) || {}
+      const targetWeeks = (await kvGet('targetWeeks')) || 6
       res.status(200).json({ settings, targetWeeks })
     } catch (err) {
       res.status(500).json({ error: err.message })
@@ -18,19 +18,19 @@ export default async function handler(req, res) {
 
       // Handle targetWeeks separately
       if (field === 'targetWeeks') {
-        await kv.set('targetWeeks', Number(value))
+        await kvSet('targetWeeks', Number(value))
         return res.status(200).json({ ok: true })
       }
 
       // Load existing settings
-      const allSettings = (await kv.get('itemSettings')) || {}
+      const allSettings = (await kvGet('itemSettings')) || {}
       if (!allSettings[itemName]) allSettings[itemName] = {}
 
       // Update the specific field
       const numFields = ['pack', 'bottleML', 'nipML']
       allSettings[itemName][field] = numFields.includes(field) ? Number(value) : value
 
-      await kv.set('itemSettings', allSettings)
+      await kvSet('itemSettings', allSettings)
       res.status(200).json({ ok: true })
     } catch (err) {
       res.status(500).json({ error: err.message })
