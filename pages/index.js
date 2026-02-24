@@ -51,12 +51,13 @@ export default function Home() {
     }
   }
 
-  const loadItems = useCallback(async (showRefresh = false) => {
+  const loadItems = useCallback(async (showRefresh = false, days = null) => {
     if (showRefresh) setRefreshing(true)
     else setLoading(true)
     setError(null)
     try {
-      const r = await fetch(`/api/items?days=${daysBack}`)
+      const effectiveDays = days || daysBack
+      const r = await fetch(`/api/items?days=${effectiveDays}`)
       if (!r.ok) throw new Error((await r.json()).error || 'Failed to load')
       const data = await r.json()
       setItems(data.items)
@@ -70,7 +71,7 @@ export default function Home() {
     }
   }, [])
 
-  useEffect(() => { loadItems() }, [loadItems, daysBack])
+  useEffect(() => { loadItems() }, [loadItems])
 
   useEffect(() => {
     fetch('/api/settings').then(r => r.json()).then(data => {
@@ -301,7 +302,7 @@ ${orderItems.length === 0 ? '<p style="color:#6b7280;margin-top:16px">No items t
                 <button key={d}
                   style={{ ...styles.tab, padding: '4px 12px', fontSize: 12,
                     ...(daysBack === d ? { background: '#0f172a', color: '#fff', borderColor: '#0f172a' } : {}) }}
-                  onClick={() => { setDaysBack(d); loadItems(true) }}>
+                  onClick={() => { setDaysBack(d); loadItems(true, d) }}>
                   {d}d
                 </button>
               ))}
