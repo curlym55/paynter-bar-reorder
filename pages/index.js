@@ -161,7 +161,7 @@ export default function Home() {
                 />
               ) : (
                 <span
-                  style={{ ...styles.statNum, color: '#0f172a', cursor: 'pointer', textDecoration: 'underline dotted' }}
+                  style={{ ...styles.statNum, color: '#f8fafc', cursor: 'pointer', textDecoration: 'underline dotted' }}
                   onClick={() => setEditingTarget(true)}
                   title="Click to edit"
                 >{targetWeeks}</span>
