@@ -34,6 +34,7 @@ export default function Home() {
   const [addingSupplier, setAddingSupplier] = useState(false)
   const [newSupplierName, setNewSupplierName] = useState('')
   const [printing, setPrinting]         = useState(null)
+  const [daysBack, setDaysBack]         = useState(90)
 
   useEffect(() => {
     if (sessionStorage.getItem('bar_authed') === 'yes') setAuthed(true)
@@ -55,7 +56,7 @@ export default function Home() {
     else setLoading(true)
     setError(null)
     try {
-      const r = await fetch('/api/items')
+      const r = await fetch(`/api/items?days=${daysBack}`)
       if (!r.ok) throw new Error((await r.json()).error || 'Failed to load')
       const data = await r.json()
       setItems(data.items)
@@ -69,7 +70,7 @@ export default function Home() {
     }
   }, [])
 
-  useEffect(() => { loadItems() }, [loadItems])
+  useEffect(() => { loadItems() }, [loadItems, daysBack])
 
   useEffect(() => {
     fetch('/api/settings').then(r => r.json()).then(data => {
@@ -294,6 +295,17 @@ ${orderItems.length === 0 ? '<p style="color:#6b7280;margin-top:16px">No items t
               <input type="checkbox" checked={filterOrder} onChange={e => setFilterOrder(e.target.checked)} style={{ marginRight: 6 }} />
               Order items only
             </label>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span style={{ fontSize: 12, color: '#64748b', fontWeight: 600 }}>Sales period:</span>
+              {[30, 60, 90].map(d => (
+                <button key={d}
+                  style={{ ...styles.tab, padding: '4px 12px', fontSize: 12,
+                    ...(daysBack === d ? { background: '#0f172a', color: '#fff', borderColor: '#0f172a' } : {}) }}
+                  onClick={() => { setDaysBack(d); loadItems(true) }}>
+                  {d}d
+                </button>
+              ))}
+            </div>
             {view !== 'all' && (
               <button style={{ ...styles.btn, background: '#0f172a', fontSize: 12, padding: '6px 14px' }}
                 onClick={() => printOrderSheet(view)}>Print {view} Order</button>
