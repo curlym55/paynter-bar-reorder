@@ -7,14 +7,14 @@ export default async function handler(req, res) {
   if (!token) return res.status(500).json({ error: 'SQUARE_ACCESS_TOKEN not configured' })
 
   try {
-    const squareItems  = await fetchSquareData(token)
-    const allSettings  = (await kvGet('itemSettings').catch(() => null)) || {}
-    const targetWeeks  = (await kvGet('targetWeeks').catch(() => null))  || 6
-    const suppliers    = (await kvGet('suppliers').catch(() => null))    || ['Dan Murphys', 'Coles Woolies', 'ACW']
+    const daysBack    = parseInt(req.query.days) || 90
+    const squareItems = await fetchSquareData(token, daysBack)
+    const allSettings = (await kvGet('itemSettings').catch(() => null)) || {}
+    const targetWeeks = (await kvGet('targetWeeks').catch(() => null))  || 6
+    const suppliers   = (await kvGet('suppliers').catch(() => null))    || ['Dan Murphys', 'Coles Woolies', 'ACW']
 
     const items = squareItems.map(item => {
       const settings = allSettings[item.name] || {}
-      // Apply stock override if set
       const effectiveItem = settings.stockOverride !== undefined && settings.stockOverride !== null
         ? { ...item, onHand: settings.stockOverride }
         : item
@@ -31,7 +31,7 @@ export default async function handler(req, res) {
       return catDiff !== 0 ? catDiff : a.name.localeCompare(b.name)
     })
 
-    res.status(200).json({ items, targetWeeks, suppliers, lastUpdated: new Date().toISOString() })
+    res.status(200).json({ items, targetWeeks, suppliers, daysBack, lastUpdated: new Date().toISOString() })
   } catch (err) {
     console.error('Items API error:', err)
     res.status(500).json({ error: err.message })
