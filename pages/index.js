@@ -147,7 +147,7 @@ export default function Home() {
               <span style={{ ...styles.statNum, color: '#2563eb' }}>{orderCount}</span>
               <span style={styles.statLabel}>To Order</span>
             </div>
-            <div style={styles.stat}>
+            <div style={{ ...styles.stat, borderColor: '#f59e0b' }}>
               <span style={styles.statLabel}>Target Weeks</span>
               {editingTarget ? (
                 <input
@@ -161,7 +161,7 @@ export default function Home() {
                 />
               ) : (
                 <span
-                  style={{ ...styles.statNum, color: '#f8fafc', cursor: 'pointer', textDecoration: 'underline dotted' }}
+                  style={{ ...styles.statNum, color: '#f59e0b', cursor: 'pointer', textDecoration: 'underline dotted' }}
                   onClick={() => setEditingTarget(true)}
                   title="Click to edit"
                 >{targetWeeks}</span>
