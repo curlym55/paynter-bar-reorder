@@ -17,6 +17,9 @@ const SUPPLIER_COLORS = {
 }
 
 export default function Home() {
+  const [authed, setAuthed]             = useState(false)
+  const [pin, setPin]                   = useState('')
+  const [pinError, setPinError]         = useState(false)
   const [items, setItems]               = useState([])
   const [loading, setLoading]           = useState(true)
   const [refreshing, setRefreshing]     = useState(false)
@@ -31,6 +34,21 @@ export default function Home() {
   const [addingSupplier, setAddingSupplier] = useState(false)
   const [newSupplierName, setNewSupplierName] = useState('')
   const [printing, setPrinting]         = useState(null)
+
+  useEffect(() => {
+    if (sessionStorage.getItem('bar_authed') === 'yes') setAuthed(true)
+  }, [])
+
+  function checkPin() {
+    if (pin === '3838') {
+      sessionStorage.setItem('bar_authed', 'yes')
+      setAuthed(true)
+      setPinError(false)
+    } else {
+      setPinError(true)
+      setPin('')
+    }
+  }
 
   const loadItems = useCallback(async (showRefresh = false) => {
     if (showRefresh) setRefreshing(true)
@@ -157,6 +175,34 @@ ${orderItems.length === 0 ? '<p style="color:#6b7280;margin-top:16px">No items t
 
   const orderCount = items.filter(i => i.orderQty > 0).length
   const critCount  = items.filter(i => i.priority === 'CRITICAL').length
+
+  if (!authed) return (
+    <div style={styles.loadWrap}>
+      <div style={{ ...styles.loadBox, background: '#fff', padding: 40, borderRadius: 16, boxShadow: '0 4px 24px rgba(0,0,0,0.10)', minWidth: 300 }}>
+        <div style={{ marginBottom: 8 }}>
+          <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.2em', color: '#94a3b8', textTransform: 'uppercase', fontFamily: 'IBM Plex Mono, monospace' }}>PAYNTER BAR</span>
+        </div>
+        <h2 style={{ fontSize: 20, fontWeight: 700, color: '#0f172a', marginBottom: 4 }}>Reorder Planner</h2>
+        <p style={{ fontSize: 13, color: '#64748b', marginBottom: 24 }}>Enter PIN to continue</p>
+        <input
+          type="password"
+          inputMode="numeric"
+          maxLength={6}
+          value={pin}
+          onChange={e => { setPin(e.target.value); setPinError(false) }}
+          onKeyDown={e => e.key === 'Enter' && checkPin()}
+          placeholder="PIN"
+          autoFocus
+          style={{ width: '100%', fontSize: 24, textAlign: 'center', padding: '10px 16px', borderRadius: 8, border: pinError ? '2px solid #dc2626' : '2px solid #e2e8f0', outline: 'none', fontFamily: 'IBM Plex Mono, monospace', letterSpacing: '0.3em', marginBottom: 8 }}
+        />
+        {pinError && <p style={{ color: '#dc2626', fontSize: 12, marginBottom: 8, textAlign: 'center' }}>Incorrect PIN. Try again.</p>}
+        <button onClick={checkPin}
+          style={{ width: '100%', background: '#0f172a', color: '#fff', border: 'none', borderRadius: 8, padding: '12px', fontSize: 15, fontWeight: 700, cursor: 'pointer', marginTop: 4 }}>
+          Enter
+        </button>
+      </div>
+    </div>
+  )
 
   if (loading) return (
     <div style={styles.loadWrap}>
