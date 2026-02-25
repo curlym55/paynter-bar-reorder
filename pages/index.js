@@ -171,6 +171,61 @@ ${orderItems.length === 0 ? '<p style="color:#6b7280;margin-top:16px">No items t
     setTimeout(() => w.print(), 500)
   }
 
+  function exportStocktake() {
+    // Build rows
+    const rows = displayed.map(item => ({
+      'Item': item.name,
+      'Category': item.category,
+      'Supplier': item.supplier,
+      'Cool Room': '',
+      'Store Room': '',
+      'Bar': '',
+      'Total Count': '',
+      'Square On Hand': item.onHand,
+      'Difference': '',
+    }))
+
+    // Load SheetJS dynamically
+    const script = document.createElement('script')
+    script.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js'
+    script.onload = () => {
+      const ws = window.XLSX.utils.json_to_sheet(rows)
+
+      // Column widths
+      ws['!cols'] = [
+        { wch: 40 }, // Item
+        { wch: 18 }, // Category
+        { wch: 16 }, // Supplier
+        { wch: 12 }, // Cool Room
+        { wch: 12 }, // Store Room
+        { wch: 10 }, // Bar
+        { wch: 13 }, // Total Count
+        { wch: 16 }, // Square On Hand
+        { wch: 12 }, // Difference
+      ]
+
+      // Freeze header row
+      ws['!freeze'] = { xSplit: 0, ySplit: 1 }
+
+      // Add Total Count formula = D+E+F, Difference = H-G
+      const range = window.XLSX.utils.decode_range(ws['!ref'])
+      for (let r = 1; r <= range.e.r; r++) {
+        const row = r + 1
+        // Total Count = Cool Room + Store Room + Bar
+        ws[`G${row}`] = { f: `D${row}+E${row}+F${row}`, t: 'n' }
+        // Difference = Total Count - Square On Hand
+        ws[`I${row}`] = { f: `G${row}-H${row}`, t: 'n' }
+      }
+
+      const wb = window.XLSX.utils.book_new()
+      window.XLSX.utils.book_append_sheet(wb, ws, 'Stocktake')
+
+      const date = new Date().toISOString().split('T')[0]
+      window.XLSX.writeFile(wb, `Paynter-Bar-Stocktake-${date}.xlsx`)
+    }
+    document.head.appendChild(script)
+  }
+
   const displayed = items
     .filter(item => view === 'all' || item.supplier === view)
     .filter(item => !filterOrder || item.orderQty > 0)
@@ -311,6 +366,8 @@ ${orderItems.length === 0 ? '<p style="color:#6b7280;margin-top:16px">No items t
               <button style={{ ...styles.btn, background: '#0f172a', fontSize: 12, padding: '6px 14px' }}
                 onClick={() => printOrderSheet(view)}>Print {view} Order</button>
             )}
+            <button style={{ ...styles.btn, background: '#16a34a', fontSize: 12, padding: '6px 14px' }}
+              onClick={exportStocktake}>Export Stocktake</button>
             <div style={{ position: 'relative' }}>
               <button style={{ ...styles.btn, background: '#374151', fontSize: 12, padding: '6px 14px' }}
                 onClick={() => setPrinting(p => p === 'menu' ? null : 'menu')}>Print Order Sheet</button>
@@ -500,9 +557,9 @@ const styles = {
   supplierInput: { fontSize: 13, border: '1px solid #3b82f6', borderRadius: 6, padding: '6px 10px', fontFamily: "'IBM Plex Sans', sans-serif", width: 160 },
   dropdown: { position: 'absolute', top: '100%', right: 0, marginTop: 4, background: '#fff', border: '1px solid #e2e8f0', borderRadius: 8, boxShadow: '0 4px 12px rgba(0,0,0,0.1)', zIndex: 100, minWidth: 200 },
   dropItem: { display: 'block', width: '100%', padding: '10px 16px', background: 'none', border: 'none', textAlign: 'left', cursor: 'pointer', fontSize: 13, color: '#374151', fontFamily: "'IBM Plex Sans', sans-serif" },
-  tableWrap: { overflowX: 'auto' },
+  tableWrap: { overflowX: 'auto', overflowY: 'auto', maxHeight: 'calc(100vh - 220px)' },
   table: { width: '100%', borderCollapse: 'collapse', fontSize: 13, background: '#fff' },
-  thead: { background: '#f8fafc' },
+  thead: { background: '#f8fafc', position: 'sticky', top: 0, zIndex: 10 },
   th: { padding: '10px 14px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.08em', borderBottom: '2px solid #e2e8f0', whiteSpace: 'nowrap' },
   td: { padding: '9px 14px', borderBottom: '1px solid #f1f5f9', verticalAlign: 'middle' },
   inlineSelect: { fontSize: 12, border: '1px solid #3b82f6', borderRadius: 4, padding: '2px 4px', background: '#eff6ff', color: '#1d4ed8', fontFamily: "'IBM Plex Sans', sans-serif" },
