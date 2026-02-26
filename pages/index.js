@@ -1180,7 +1180,7 @@ ${orderItems.length === 0 ? '<p style="color:#6b7280;margin-top:16px">No items t
                               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 1 }}>
                                 <EditNumber value={sell ?? ''} placeholder="$0.00" decimals={2} prefix="$"
                                   onChange={v => saveSetting(item.name, 'sellPrice', v)}
-                                  saving={saving[`${item.name}_sellPrice`]} min={0} />
+                                  saving={saving[`${item.name}_sellPrice`]} min={0} readOnly={readOnly} />
                                 {sellFromSq && <span style={{ fontSize: 9, color: '#94a3b8', fontFamily: 'IBM Plex Mono, monospace' }}>from Square</span>}
                               </div>
                             </td>
@@ -1658,8 +1658,9 @@ function SalesView({ period, setPeriod, custom, setCustom, report, loading, erro
 }
 
 // ─── EDIT COMPONENTS ──────────────────────────────────────────────────────────
-function EditSelect({ value, options, onChange, saving, colorMap }) {
+function EditSelect({ value, options, onChange, saving, colorMap, readOnly }) {
   const [editing, setEditing] = useState(false)
+  if (readOnly) { const color = colorMap ? colorMap[value] : null; return <span style={{ fontSize: 12, color: color || '#374151', fontWeight: color ? 600 : 400 }}>{value}</span> }
   if (saving) return <span style={{ color: '#94a3b8', fontSize: 12 }}>Saving...</span>
   if (editing) return (
     <select defaultValue={value} autoFocus style={styles.inlineSelect}
@@ -1673,10 +1674,11 @@ function EditSelect({ value, options, onChange, saving, colorMap }) {
     onClick={() => setEditing(true)} title="Click to edit">{value}</span>
 }
 
-function EditNumber({ value, onChange, saving, min, placeholder, decimals, prefix }) {
+function EditNumber({ value, onChange, saving, min, placeholder, decimals, prefix, readOnly }) {
   const [editing, setEditing] = useState(false)
   const [val, setVal] = useState(value)
   useEffect(() => setVal(value), [value])
+  if (readOnly) { const display = decimals && (value !== '' && value != null) ? `${prefix || ''}${Number(value).toFixed(decimals)}` : (value !== '' && value != null ? `${prefix || ''}${value}` : '—'); return <span style={{ fontSize: 12, color: '#374151', fontFamily: 'IBM Plex Mono, monospace' }}>{display}</span> }
   if (saving) return <span style={{ color: '#94a3b8', fontSize: 12 }}>...</span>
   if (editing) return (
     <input type="number" value={val} min={min || 0} step={decimals ? 0.01 : 1} style={styles.inlineInput}
