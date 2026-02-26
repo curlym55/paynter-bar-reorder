@@ -768,6 +768,7 @@ ${orderItems.length === 0 ? '<p style="color:#6b7280;margin-top:16px">No items t
                     <th style={{ ...styles.th, textAlign: 'right' }}>Target</th>
                     <th style={{ ...styles.th, textAlign: 'center' }}>Pack</th>
                     <th style={{ ...styles.th, textAlign: 'center' }}>Bottle Size</th>
+                    <th style={{ ...styles.th, textAlign: 'center' }}>Nip Size</th>
                     <th style={{ ...styles.th, textAlign: 'right' }}>Order Qty</th>
                     <th style={{ ...styles.th, textAlign: 'right' }}>Bottles</th>
                     <th style={{ ...styles.th, textAlign: 'center' }}>Priority</th>
@@ -781,7 +782,7 @@ ${orderItems.length === 0 ? '<p style="color:#6b7280;margin-top:16px">No items t
                 </thead>
                 <tbody>
                   {displayed.length === 0 && (
-                    <tr><td colSpan={viewMode === 'pricing' ? 15 : 12} style={{ textAlign: 'center', padding: '48px 24px', color: '#64748b' }}>
+                    <tr><td colSpan={viewMode === 'pricing' ? 16 : 13} style={{ textAlign: 'center', padding: '48px 24px', color: '#64748b' }}>
                       {filterOrder ? 'No items to order this week.' : 'No items found.'}
                     </td></tr>
                   )}
@@ -813,6 +814,13 @@ ${orderItems.length === 0 ? '<p style="color:#6b7280;margin-top:16px">No items t
                             <EditSelect value={String(item.bottleML)} options={['700', '750', '1000']}
                               onChange={v => saveSetting(item.name, 'bottleML', Number(v))}
                               saving={saving[`${item.name}_bottleML`]} />
+                          ) : <span style={{ color: '#e2e8f0' }}>—</span>}
+                        </td>
+                        <td style={{ ...styles.td, textAlign: 'center' }}>
+                          {item.isSpirit ? (
+                            <EditSelect value={String(item.nipML || 30)} options={['30', '60']}
+                              onChange={v => saveSetting(item.name, 'nipML', Number(v))}
+                              saving={saving[`${item.name}_nipML`]} />
                           ) : <span style={{ color: '#e2e8f0' }}>—</span>}
                         </td>
                         <td style={{ ...styles.td, textAlign: 'right', fontWeight: 700, fontFamily: 'IBM Plex Mono, monospace', fontSize: 15 }}>
