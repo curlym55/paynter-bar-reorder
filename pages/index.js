@@ -1517,7 +1517,7 @@ function SalesView({ period, setPeriod, custom, setCustom, report, loading, erro
   return (
     <div style={{ padding: '24px 32px' }}>
       {/* Period controls */}
-      <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', marginBottom: 24, background: '#fff', padding: '16px 20px', borderBottom: '1px solid #e2e8f0' }}>
+      <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', marginBottom: 12, background: '#fff', padding: '10px 20px', borderBottom: '1px solid #e2e8f0' }}>
         {[['month','This Month'],['3months','Last 3 Months'],['custom','Custom Range']].map(([val, label]) => (
           <button key={val}
             style={{ ...styles.tab, ...(period === val ? styles.tabActive : {}) }}
@@ -1550,7 +1550,7 @@ function SalesView({ period, setPeriod, custom, setCustom, report, loading, erro
       {report && !loading && (
         <>
           {/* Summary cards */}
-          <div style={{ display: 'flex', gap: 16, marginBottom: 24, flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', gap: 10, marginBottom: 12, flexWrap: 'wrap' }}>
             {[
               { label: 'Units Sold',   value: totals.units,            prev: totals.prev,   money: false },
               ...(hasRev ? [{ label: 'Revenue', value: fmt(totals.rev), prev: totals.prevRev, money: true, rawVal: totals.rev, rawPrev: totals.prevRev }] : []),
@@ -1561,11 +1561,11 @@ function SalesView({ period, setPeriod, custom, setCustom, report, loading, erro
               const numPrev = money ? (rawPrev ?? 0) : prev
               const chg = (!noChange && numPrev > 0) ? +(((numVal - numPrev) / numPrev) * 100).toFixed(1) : null
               return (
-                <div key={label} style={{ background: '#fff', borderRadius: 12, border: '1px solid #e2e8f0', padding: '20px 24px', minWidth: 150, flex: 1 }}>
-                  <div style={{ fontSize: 11, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>{label}</div>
-                  <div style={{ fontSize: 26, fontWeight: 700, fontFamily: 'IBM Plex Mono, monospace', color: '#0f172a' }}>{value}</div>
+                <div key={label} style={{ background: '#fff', borderRadius: 10, border: '1px solid #e2e8f0', padding: '12px 16px', minWidth: 130, flex: 1 }}>
+                  <div style={{ fontSize: 10, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 4 }}>{label}</div>
+                  <div style={{ fontSize: 20, fontWeight: 700, fontFamily: 'IBM Plex Mono, monospace', color: '#0f172a' }}>{value}</div>
                   {!noChange && prev != null && (
-                    <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 4 }}>
+                    <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 2 }}>
                       Prior: {money ? fmt(rawPrev) : prev}
                       {chg != null && <span style={{ marginLeft: 6, color: chg >= 0 ? '#16a34a' : '#dc2626', fontWeight: 700 }}>{chg >= 0 ? '+' : ''}{chg}%</span>}
                     </div>
@@ -1576,8 +1576,8 @@ function SalesView({ period, setPeriod, custom, setCustom, report, loading, erro
           </div>
 
           {/* Category bar */}
-          <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #e2e8f0', padding: '20px 24px', marginBottom: 24, overflowX: 'auto' }}>
-            <div style={{ fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 14 }}>Category Breakdown — click to filter</div>
+          <div style={{ background: '#fff', borderRadius: 10, border: '1px solid #e2e8f0', padding: '10px 16px', marginBottom: 12, overflowX: 'auto' }}>
+            <div style={{ fontSize: 10, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>Category Breakdown — click to filter</div>
             <div style={{ display: 'flex', gap: 0, minWidth: 'max-content' }}>
               {CATEGORY_ORDER_LIST.filter(c => report.categories[c]).map(c => {
                 const cat = report.categories[c]
@@ -1585,20 +1585,20 @@ function SalesView({ period, setPeriod, custom, setCustom, report, loading, erro
                 const active = category === c
                 return (
                   <button key={c} onClick={() => setCategory(active ? 'All' : c)}
-                    style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', padding: '10px 16px', cursor: 'pointer', border: 'none', borderBottom: `3px solid ${active ? '#2563eb' : '#e2e8f0'}`, background: active ? '#eff6ff' : 'transparent', minWidth: 110 }}>
-                    <span style={{ fontSize: 10, color: '#94a3b8', marginBottom: 2 }}>{c}</span>
-                    <span style={{ fontSize: 20, fontWeight: 700, fontFamily: 'IBM Plex Mono, monospace', color: '#0f172a' }}>{cat.unitsSold}</span>
-                    <span style={{ fontSize: 10, color: '#94a3b8' }}>{pct}%</span>
-                    {hasRev && cat.revenue > 0 && <span style={{ fontSize: 10, color: '#16a34a', fontWeight: 600 }}>{fmt(cat.revenue)}</span>}
+                    style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', padding: '6px 12px', cursor: 'pointer', border: 'none', borderBottom: `3px solid ${active ? '#2563eb' : '#e2e8f0'}`, background: active ? '#eff6ff' : 'transparent', minWidth: 90 }}>
+                    <span style={{ fontSize: 9, color: '#94a3b8', marginBottom: 1 }}>{c}</span>
+                    <span style={{ fontSize: 15, fontWeight: 700, fontFamily: 'IBM Plex Mono, monospace', color: '#0f172a' }}>{cat.unitsSold}</span>
+                    <span style={{ fontSize: 9, color: '#94a3b8' }}>{pct}%</span>
+                    {hasRev && cat.revenue > 0 && <span style={{ fontSize: 9, color: '#16a34a', fontWeight: 600 }}>{fmt(cat.revenue)}</span>}
                   </button>
                 )
               })}
               <button onClick={() => setCategory('All')}
-                style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', padding: '10px 16px', cursor: 'pointer', border: 'none', borderBottom: `3px solid ${category === 'All' ? '#2563eb' : '#e2e8f0'}`, background: category === 'All' ? '#eff6ff' : 'transparent', minWidth: 80 }}>
-                <span style={{ fontSize: 10, color: '#94a3b8', marginBottom: 2 }}>ALL</span>
-                <span style={{ fontSize: 20, fontWeight: 700, fontFamily: 'IBM Plex Mono, monospace', color: '#0f172a' }}>{report.totals.unitsSold}</span>
-                <span style={{ fontSize: 10, color: '#94a3b8' }}>100%</span>
-                {hasRev && <span style={{ fontSize: 10, color: '#16a34a', fontWeight: 600 }}>{fmt(report.totals.revenue)}</span>}
+                style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', padding: '6px 12px', cursor: 'pointer', border: 'none', borderBottom: `3px solid ${category === 'All' ? '#2563eb' : '#e2e8f0'}`, background: category === 'All' ? '#eff6ff' : 'transparent', minWidth: 70 }}>
+                <span style={{ fontSize: 9, color: '#94a3b8', marginBottom: 1 }}>ALL</span>
+                <span style={{ fontSize: 15, fontWeight: 700, fontFamily: 'IBM Plex Mono, monospace', color: '#0f172a' }}>{report.totals.unitsSold}</span>
+                <span style={{ fontSize: 9, color: '#94a3b8' }}>100%</span>
+                {hasRev && <span style={{ fontSize: 9, color: '#16a34a', fontWeight: 600 }}>{fmt(report.totals.revenue)}</span>}
               </button>
             </div>
           </div>
@@ -1619,7 +1619,7 @@ function SalesView({ period, setPeriod, custom, setCustom, report, loading, erro
                 ))}
               </div>
             </div>
-            <div style={{ overflowX: 'auto', overflowY: 'auto', maxHeight: 'calc(100vh - 500px)' }}>
+            <div style={{ overflowX: 'auto', overflowY: 'auto', maxHeight: 'calc(100vh - 380px)' }}>
               <table style={{ ...styles.table, fontSize: 13 }}>
                 <thead>
                   <tr style={styles.thead}>
