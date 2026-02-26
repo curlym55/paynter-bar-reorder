@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import Head from 'next/head'
 import { CATEGORIES } from '../lib/calculations'
 
@@ -15,6 +15,11 @@ const SUPPLIER_COLORS = {
   'Coles Woolies': '#c2410c',
   'ACW':           '#166534',
 }
+
+const CATEGORY_ORDER_LIST = [
+  'Beer','Cider','PreMix','White Wine','Red Wine','Rose',
+  'Sparkling','Fortified & Liqueurs','Spirits','Soft Drinks','Snacks'
+]
 
 export default function Home() {
   const [authed, setAuthed]             = useState(false)
@@ -36,6 +41,14 @@ export default function Home() {
   const [printing, setPrinting]         = useState(null)
   const [daysBack, setDaysBack]         = useState(90)
   const [viewMode, setViewMode]         = useState('reorder')
+  const [mainTab, setMainTab]           = useState('reorder')
+  const [salesPeriod, setSalesPeriod]   = useState('month')
+  const [salesCustom, setSalesCustom]   = useState({ start: '', end: '' })
+  const [salesReport, setSalesReport]   = useState(null)
+  const [salesLoading, setSalesLoading] = useState(false)
+  const [salesError, setSalesError]     = useState(null)
+  const [salesCategory, setSalesCategory] = useState('All')
+  const [salesSort, setSalesSort]       = useState('units')
 
   useEffect(() => {
     if (sessionStorage.getItem('bar_authed') === 'yes') setAuthed(true)
@@ -80,6 +93,51 @@ export default function Home() {
     }).catch(() => {})
   }, [])
 
+  async function loadSalesReport(period, custom) {
+    setSalesLoading(true)
+    setSalesError(null)
+    setSalesReport(null)
+    try {
+      const now = new Date()
+      let start, end, compareStart, compareEnd
+
+      if (period === 'month') {
+        end   = new Date(now)
+        start = new Date(now.getFullYear(), now.getMonth(), 1)
+        compareEnd   = new Date(start.getTime() - 1)
+        compareStart = new Date(compareEnd.getFullYear(), compareEnd.getMonth(), 1)
+      } else if (period === '3months') {
+        end   = new Date(now)
+        start = new Date(now); start.setMonth(start.getMonth() - 3); start.setHours(0,0,0,0)
+        compareEnd   = new Date(start.getTime() - 1)
+        compareStart = new Date(compareEnd); compareStart.setMonth(compareStart.getMonth() - 3); compareStart.setHours(0,0,0,0)
+      } else if (period === 'custom' && custom.start && custom.end) {
+        start = new Date(custom.start); start.setHours(0,0,0,0)
+        end   = new Date(custom.end);   end.setHours(23,59,59,999)
+        const days = Math.round((end - start) / 86400000) + 1
+        compareEnd   = new Date(start.getTime() - 1)
+        compareStart = new Date(compareEnd.getTime() - days * 86400000)
+      } else return
+
+      end.setHours(23,59,59,999)
+
+      const params = new URLSearchParams({
+        start:        start.toISOString(),
+        end:          end.toISOString(),
+        compareStart: compareStart.toISOString(),
+        compareEnd:   compareEnd.toISOString(),
+      })
+      const r = await fetch(`/api/sales?${params}`)
+      if (!r.ok) throw new Error((await r.json()).error || 'Failed')
+      const data = await r.json()
+      setSalesReport(data)
+    } catch(e) {
+      setSalesError(e.message)
+    } finally {
+      setSalesLoading(false)
+    }
+  }
+
   async function saveSetting(itemName, field, value) {
     const key = `${itemName}_${field}`
     setSaving(s => ({ ...s, [key]: true }))
@@ -93,23 +151,6 @@ export default function Home() {
         if (item.name !== itemName) return item
         return { ...item, [field]: ['pack','bottleML','nipML','stockOverride'].includes(field) ? Number(value) : value }
       }))
-    } finally {
-      setSaving(s => { const n = { ...s }; delete n[key]; return n })
-    }
-  }
-
-  async function clearOverride(itemName) {
-    const key = `${itemName}_stockOverride`
-    setSaving(s => ({ ...s, [key]: true }))
-    try {
-      await fetch('/api/settings', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ itemName, field: 'stockOverride', value: null })
-      })
-      setItems(prev => prev.map(item =>
-        item.name === itemName ? { ...item, stockOverride: null } : item
-      ))
     } finally {
       setSaving(s => { const n = { ...s }; delete n[key]; return n })
     }
@@ -145,14 +186,13 @@ export default function Home() {
   function printOrderSheet(supplier) {
     const orderItems = items.filter(i => i.supplier === supplier && i.orderQty > 0)
     const date = new Date().toLocaleDateString('en-AU', { day: '2-digit', month: 'short', year: 'numeric' })
-    const isSpirit = (cat) => cat === 'Spirits' || cat === 'Fortified & Liqueurs'
     const rows = orderItems.map(item => `
       <tr>
         <td>${item.name}</td>
         <td>${item.category}</td>
         <td style="text-align:right">${item.onHand}</td>
-        <td style="text-align:right;font-weight:700">${item.orderQty}</td>
-        <td style="text-align:right">${isSpirit(item.category) && item.bottlesToOrder ? item.bottlesToOrder : '-'}</td>
+        <td style="text-align:right;font-weight:700">${item.isSpirit ? (item.nipsToOrder || '-') : (item.orderQty || '-')}</td>
+        <td style="text-align:right">${item.isSpirit && item.bottlesToOrder ? item.bottlesToOrder : '-'}</td>
         <td>${item.notes || ''}</td>
       </tr>`).join('')
     const html = `<!DOCTYPE html><html><head><title>Order - ${supplier} - ${date}</title>
@@ -173,56 +213,26 @@ ${orderItems.length === 0 ? '<p style="color:#6b7280;margin-top:16px">No items t
   }
 
   function exportStocktake() {
-    // Build rows
-    const rows = displayed.map(item => ({
-      'Item': item.name,
-      'Category': item.category,
-      'Supplier': item.supplier,
-      'Cool Room': '',
-      'Store Room': '',
-      'Bar': '',
-      'Total Count': '',
-      'Square On Hand': item.onHand,
-      'Difference': '',
-    }))
-
-    // Load SheetJS dynamically
     const script = document.createElement('script')
     script.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js'
     script.onload = () => {
+      const rows = displayed.map(item => ({
+        'Item': item.name, 'Category': item.category, 'Supplier': item.supplier,
+        'Cool Room': '', 'Store Room': '', 'Bar': '', 'Total Count': '',
+        'Square On Hand': item.onHand, 'Difference': '',
+      }))
       const ws = window.XLSX.utils.json_to_sheet(rows)
-
-      // Column widths
-      ws['!cols'] = [
-        { wch: 40 }, // Item
-        { wch: 18 }, // Category
-        { wch: 16 }, // Supplier
-        { wch: 12 }, // Cool Room
-        { wch: 12 }, // Store Room
-        { wch: 10 }, // Bar
-        { wch: 13 }, // Total Count
-        { wch: 16 }, // Square On Hand
-        { wch: 12 }, // Difference
-      ]
-
-      // Freeze header row
+      ws['!cols'] = [{ wch: 40 },{ wch: 18 },{ wch: 16 },{ wch: 12 },{ wch: 12 },{ wch: 10 },{ wch: 13 },{ wch: 16 },{ wch: 12 }]
       ws['!freeze'] = { xSplit: 0, ySplit: 1 }
-
-      // Add Total Count formula = D+E+F, Difference = H-G
       const range = window.XLSX.utils.decode_range(ws['!ref'])
       for (let r = 1; r <= range.e.r; r++) {
         const row = r + 1
-        // Total Count = Cool Room + Store Room + Bar
         ws[`G${row}`] = { f: `D${row}+E${row}+F${row}`, t: 'n' }
-        // Difference = Total Count - Square On Hand
         ws[`I${row}`] = { f: `G${row}-H${row}`, t: 'n' }
       }
-
       const wb = window.XLSX.utils.book_new()
       window.XLSX.utils.book_append_sheet(wb, ws, 'Stocktake')
-
-      const date = new Date().toISOString().split('T')[0]
-      window.XLSX.writeFile(wb, `Paynter-Bar-Stocktake-${date}.xlsx`)
+      window.XLSX.writeFile(wb, `Paynter-Bar-Stocktake-${new Date().toISOString().split('T')[0]}.xlsx`)
     }
     document.head.appendChild(script)
   }
@@ -242,22 +252,12 @@ ${orderItems.length === 0 ? '<p style="color:#6b7280;margin-top:16px">No items t
         </div>
         <h2 style={{ fontSize: 20, fontWeight: 700, color: '#0f172a', marginBottom: 4 }}>Reorder Planner</h2>
         <p style={{ fontSize: 13, color: '#64748b', marginBottom: 24 }}>Enter PIN to continue</p>
-        <input
-          type="password"
-          inputMode="numeric"
-          maxLength={6}
-          value={pin}
+        <input type="password" inputMode="numeric" maxLength={6} value={pin}
           onChange={e => { setPin(e.target.value); setPinError(false) }}
-          onKeyDown={e => e.key === 'Enter' && checkPin()}
-          placeholder="PIN"
-          autoFocus
-          style={{ width: '100%', fontSize: 24, textAlign: 'center', padding: '10px 16px', borderRadius: 8, border: pinError ? '2px solid #dc2626' : '2px solid #e2e8f0', outline: 'none', fontFamily: 'IBM Plex Mono, monospace', letterSpacing: '0.3em', marginBottom: 8 }}
-        />
+          onKeyDown={e => e.key === 'Enter' && checkPin()} placeholder="PIN" autoFocus
+          style={{ width: '100%', fontSize: 24, textAlign: 'center', padding: '10px 16px', borderRadius: 8, border: pinError ? '2px solid #dc2626' : '2px solid #e2e8f0', outline: 'none', fontFamily: 'IBM Plex Mono, monospace', letterSpacing: '0.3em', marginBottom: 8, boxSizing: 'border-box' }} />
         {pinError && <p style={{ color: '#dc2626', fontSize: 12, marginBottom: 8, textAlign: 'center' }}>Incorrect PIN. Try again.</p>}
-        <button onClick={checkPin}
-          style={{ width: '100%', background: '#0f172a', color: '#fff', border: 'none', borderRadius: 8, padding: '12px', fontSize: 15, fontWeight: 700, cursor: 'pointer', marginTop: 4 }}>
-          Enter
-        </button>
+        <button onClick={checkPin} style={{ width: '100%', background: '#0f172a', color: '#fff', border: 'none', borderRadius: 8, padding: '12px', fontSize: 15, fontWeight: 700, cursor: 'pointer', marginTop: 4 }}>Enter</button>
       </div>
     </div>
   )
@@ -274,7 +274,7 @@ ${orderItems.length === 0 ? '<p style="color:#6b7280;margin-top:16px">No items t
   return (
     <>
       <Head>
-        <title>Paynter Bar - Reorder Planner</title>
+        <title>Paynter Bar</title>
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
       </Head>
@@ -286,14 +286,24 @@ ${orderItems.length === 0 ? '<p style="color:#6b7280;margin-top:16px">No items t
                 <span style={styles.logo}>PAYNTER BAR</span>
                 <span style={styles.logoSub}>GemLife Palmwoods</span>
               </div>
-              <h1 style={styles.title}>Reorder Planner</h1>
+              <h1 style={styles.title}>{mainTab === 'sales' ? 'Sales Report' : 'Reorder Planner'}</h1>
             </div>
             <div style={styles.headerRight}>
               {lastUpdated && <span style={styles.lastUpdated}>Updated {new Date(lastUpdated).toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit' })}</span>}
-              <button style={{ ...styles.btn, ...(refreshing ? styles.btnDisabled : {}) }}
-                onClick={() => loadItems(true)} disabled={refreshing}>
-                {refreshing ? 'Refreshing...' : 'Refresh from Square'}
-              </button>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button style={{ ...styles.btn, background: mainTab === 'sales' ? '#7c3aed' : '#4b5563' }}
+                  onClick={() => {
+                    const next = mainTab === 'sales' ? 'reorder' : 'sales'
+                    setMainTab(next)
+                    if (next === 'sales' && !salesReport) loadSalesReport(salesPeriod, salesCustom)
+                  }}>
+                  {mainTab === 'sales' ? '← Reorder' : '📊 Sales Report'}
+                </button>
+                <button style={{ ...styles.btn, ...(refreshing ? styles.btnDisabled : {}) }}
+                  onClick={() => loadItems(true)} disabled={refreshing}>
+                  {refreshing ? 'Refreshing...' : 'Refresh'}
+                </button>
+              </div>
             </div>
           </div>
           <div style={styles.statsBar}>
@@ -326,178 +336,190 @@ ${orderItems.length === 0 ? '<p style="color:#6b7280;margin-top:16px">No items t
 
         {error && <div style={styles.errorBox}><strong>Error:</strong> {error}</div>}
 
-        <div style={styles.controls}>
-          <div style={styles.viewTabs}>
-            <button style={{ ...styles.tab, ...(view === 'all' ? styles.tabActive : {}) }}
-              onClick={() => setView('all')}>All Items</button>
-            {suppliers.map(s => (
-              <button key={s} style={{ ...styles.tab, ...(view === s ? { ...styles.tabActive, background: SUPPLIER_COLORS[s] || '#374151', color: '#fff', borderColor: SUPPLIER_COLORS[s] || '#374151' } : {}) }}
-                onClick={() => setView(s)}>{s}</button>
-            ))}
-            {addingSupplier ? (
-              <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
-                <input value={newSupplierName} onChange={e => setNewSupplierName(e.target.value)}
-                  onKeyDown={e => { if (e.key === 'Enter') addSupplier(); if (e.key === 'Escape') setAddingSupplier(false) }}
-                  placeholder="Supplier name..." style={styles.supplierInput} autoFocus />
-                <button style={{ ...styles.tab, background: '#16a34a', color: '#fff', borderColor: '#16a34a' }} onClick={addSupplier}>Add</button>
-                <button style={styles.tab} onClick={() => setAddingSupplier(false)}>Cancel</button>
+        {/* SALES TAB */}
+        {mainTab === 'sales' && (
+          <SalesView
+            period={salesPeriod} setPeriod={setSalesPeriod}
+            custom={salesCustom} setCustom={setSalesCustom}
+            report={salesReport} loading={salesLoading} error={salesError}
+            category={salesCategory} setCategory={setSalesCategory}
+            sort={salesSort} setSort={setSalesSort}
+            onLoad={loadSalesReport}
+          />
+        )}
+
+        {/* REORDER TAB */}
+        {mainTab === 'reorder' && (
+          <>
+            <div style={styles.controls}>
+              <div style={styles.viewTabs}>
+                <button style={{ ...styles.tab, ...(view === 'all' ? styles.tabActive : {}) }}
+                  onClick={() => setView('all')}>All Items</button>
+                {suppliers.map(s => (
+                  <button key={s} style={{ ...styles.tab, ...(view === s ? { ...styles.tabActive, background: SUPPLIER_COLORS[s] || '#374151', color: '#fff', borderColor: SUPPLIER_COLORS[s] || '#374151' } : {}) }}
+                    onClick={() => setView(s)}>{s}</button>
+                ))}
+                {addingSupplier ? (
+                  <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+                    <input value={newSupplierName} onChange={e => setNewSupplierName(e.target.value)}
+                      onKeyDown={e => { if (e.key === 'Enter') addSupplier(); if (e.key === 'Escape') setAddingSupplier(false) }}
+                      placeholder="Supplier name..." style={styles.supplierInput} autoFocus />
+                    <button style={{ ...styles.tab, background: '#16a34a', color: '#fff', borderColor: '#16a34a' }} onClick={addSupplier}>Add</button>
+                    <button style={styles.tab} onClick={() => setAddingSupplier(false)}>Cancel</button>
+                  </div>
+                ) : (
+                  <button style={{ ...styles.tab, borderStyle: 'dashed', color: '#64748b' }}
+                    onClick={() => setAddingSupplier(true)}>+ Supplier</button>
+                )}
+                <div style={{ width: 1, background: '#e2e8f0', margin: '0 6px', alignSelf: 'stretch' }} />
+                <button style={{ ...styles.tab, ...(viewMode === 'pricing' ? { background: '#7c3aed', color: '#fff', borderColor: '#7c3aed' } : { color: '#7c3aed', borderColor: '#7c3aed' }) }}
+                  onClick={() => setViewMode(v => v === 'pricing' ? 'reorder' : 'pricing')}>$ Pricing</button>
               </div>
-            ) : (
-              <button style={{ ...styles.tab, borderStyle: 'dashed', color: '#64748b' }}
-                onClick={() => setAddingSupplier(true)}>+ Supplier</button>
-            )}
-            <div style={{ width: 1, background: '#e2e8f0', margin: '0 6px', alignSelf: 'stretch' }} />
-            <button style={{ ...styles.tab, ...(viewMode === 'pricing' ? { background: '#7c3aed', color: '#fff', borderColor: '#7c3aed' } : { color: '#7c3aed', borderColor: '#7c3aed' }) }}
-              onClick={() => setViewMode(v => v === 'pricing' ? 'reorder' : 'pricing')}>$ Pricing</button>
-          </div>
-          <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
-            <label style={styles.filterCheck}>
-              <input type="checkbox" checked={filterOrder} onChange={e => setFilterOrder(e.target.checked)} style={{ marginRight: 6 }} />
-              Order items only
-            </label>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <span style={{ fontSize: 12, color: '#64748b', fontWeight: 600 }}>Sales period:</span>
-              {[30, 60, 90].map(d => (
-                <button key={d}
-                  style={{ ...styles.tab, padding: '4px 12px', fontSize: 12,
-                    ...(daysBack === d ? { background: '#0f172a', color: '#fff', borderColor: '#0f172a' } : {}) }}
-                  onClick={() => { setDaysBack(d); loadItems(true, d) }}>
-                  {d}d
-                </button>
-              ))}
-            </div>
-            {view !== 'all' && (
-              <button style={{ ...styles.btn, background: '#0f172a', fontSize: 12, padding: '6px 14px' }}
-                onClick={() => printOrderSheet(view)}>Print {view} Order</button>
-            )}
-            <button style={{ ...styles.btn, background: '#16a34a', fontSize: 12, padding: '6px 14px' }}
-              onClick={exportStocktake}>Export Stocktake</button>
-            <div style={{ position: 'relative' }}>
-              <button style={{ ...styles.btn, background: '#374151', fontSize: 12, padding: '6px 14px' }}
-                onClick={() => setPrinting(p => p === 'menu' ? null : 'menu')}>Print Order Sheet</button>
-              {printing === 'menu' && (
-                <div style={styles.dropdown}>
-                  {suppliers.map(s => (
-                    <button key={s} style={styles.dropItem}
-                      onClick={() => { printOrderSheet(s); setPrinting(null) }}>
-                      {s} ({items.filter(i => i.supplier === s && i.orderQty > 0).length} items)
-                    </button>
+              <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+                <label style={styles.filterCheck}>
+                  <input type="checkbox" checked={filterOrder} onChange={e => setFilterOrder(e.target.checked)} style={{ marginRight: 6 }} />
+                  Order items only
+                </label>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span style={{ fontSize: 12, color: '#64748b', fontWeight: 600 }}>Sales period:</span>
+                  {[30, 60, 90].map(d => (
+                    <button key={d}
+                      style={{ ...styles.tab, padding: '4px 12px', fontSize: 12, ...(daysBack === d ? { background: '#0f172a', color: '#fff', borderColor: '#0f172a' } : {}) }}
+                      onClick={() => { setDaysBack(d); loadItems(true, d) }}>{d}d</button>
                   ))}
                 </div>
-              )}
+                {view !== 'all' && (
+                  <button style={{ ...styles.btn, background: '#0f172a', fontSize: 12, padding: '6px 14px' }}
+                    onClick={() => printOrderSheet(view)}>Print {view} Order</button>
+                )}
+                <button style={{ ...styles.btn, background: '#16a34a', fontSize: 12, padding: '6px 14px' }}
+                  onClick={exportStocktake}>Export Stocktake</button>
+                <div style={{ position: 'relative' }}>
+                  <button style={{ ...styles.btn, background: '#374151', fontSize: 12, padding: '6px 14px' }}
+                    onClick={() => setPrinting(p => p === 'menu' ? null : 'menu')}>Print Order Sheet</button>
+                  {printing === 'menu' && (
+                    <div style={styles.dropdown}>
+                      {suppliers.map(s => (
+                        <button key={s} style={styles.dropItem}
+                          onClick={() => { printOrderSheet(s); setPrinting(null) }}>
+                          {s} ({items.filter(i => i.supplier === s && i.orderQty > 0).length} items)
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
-          </div>
-        </div>
 
-        <div style={styles.tableWrap}>
-          <table style={styles.table}>
-            <thead>
-              <tr style={styles.thead}>
-                <th style={{ ...styles.th, width: 240 }}>Item</th>
-                <th style={styles.th}>Category</th>
-                <th style={styles.th}>Supplier</th>
-                <th style={{ ...styles.th, textAlign: 'right' }}>On Hand</th>
-                <th style={{ ...styles.th, textAlign: 'right' }}>Wkly Avg</th>
-                <th style={{ ...styles.th, textAlign: 'right' }}>Target</th>
-                <th style={{ ...styles.th, textAlign: 'center' }}>Pack</th>
-                <th style={{ ...styles.th, textAlign: 'center' }}>Bottle Size</th>
-                <th style={{ ...styles.th, textAlign: 'right' }}>Order Qty</th>
-                <th style={{ ...styles.th, textAlign: 'right' }}>Bottles</th>
-                <th style={{ ...styles.th, textAlign: 'center' }}>Priority</th>
-                <th style={{ ...styles.th, width: 180 }}>Notes</th>
-                {viewMode === 'pricing' && <>
-                  <th style={{ ...styles.th, textAlign: 'right', color: '#7c3aed' }}>Buy Price</th>
-                  <th style={{ ...styles.th, textAlign: 'right', color: '#7c3aed' }}>Sell Price</th>
-                  <th style={{ ...styles.th, textAlign: 'right', color: '#7c3aed' }}>Margin</th>
-                </>}
-              </tr>
-            </thead>
-            <tbody>
-              {displayed.length === 0 && (
-                <tr><td colSpan={viewMode === 'pricing' ? 15 : 12} style={{ textAlign: 'center', padding: '48px 24px', color: '#64748b' }}>
-                  {filterOrder ? 'No items to order this week.' : 'No items found.'}
-                </td></tr>
-              )}
-              {displayed.map((item, idx) => {
-                const p = PRIORITY_COLORS[item.priority]
-                const rowBg = item.orderQty > 0 ? p.bg : (idx % 2 === 0 ? '#fff' : '#f8fafc')
-                return (
-                  <tr key={item.name} style={{ background: rowBg }}>
-                    <td style={{ ...styles.td, fontWeight: 500, fontSize: 13 }}>{item.name}</td>
-                    <td style={styles.td}>
-                      <EditSelect value={item.category} options={CATEGORIES}
-                        onChange={v => saveSetting(item.name, 'category', v)}
-                        saving={saving[`${item.name}_category`]} />
-                    </td>
-                    <td style={styles.td}>
-                      <EditSelect value={item.supplier} options={suppliers}
-                        onChange={v => saveSetting(item.name, 'supplier', v)}
-                        saving={saving[`${item.name}_supplier`]} colorMap={SUPPLIER_COLORS} />
-                    </td>
-                    <td style={{ ...styles.td, textAlign: 'right', fontFamily: 'IBM Plex Mono, monospace' }}>
-                      {item.onHand}
-                    </td>
-                    <td style={{ ...styles.td, textAlign: 'right', fontFamily: 'IBM Plex Mono, monospace' }}>{item.weeklyAvg}</td>
-                    <td style={{ ...styles.td, textAlign: 'right', fontFamily: 'IBM Plex Mono, monospace' }}>{item.targetStock}</td>
-                    <td style={{ ...styles.td, textAlign: 'center' }}>
-                      <EditNumber value={item.pack} onChange={v => saveSetting(item.name, 'pack', v)}
-                        saving={saving[`${item.name}_pack`]} min={1} />
-                    </td>
-                    <td style={{ ...styles.td, textAlign: 'center' }}>
-                      {item.isSpirit ? (
-                        <EditSelect value={String(item.bottleML)} options={['700', '750', '1000']}
-                          onChange={v => saveSetting(item.name, 'bottleML', Number(v))}
-                          saving={saving[`${item.name}_bottleML`]} />
-                      ) : <span style={{ color: '#e2e8f0' }}>—</span>}
-                    </td>
-                     <td style={{ ...styles.td, textAlign: 'right', fontWeight: 700, fontFamily: 'IBM Plex Mono, monospace', fontSize: 15 }}>
-                       {item.isSpirit ? (item.nipsToOrder > 0 ? item.nipsToOrder : '-') : (item.orderQty > 0 ? item.orderQty : '-')}
-                     </td>
-                     <td style={{ ...styles.td, textAlign: 'right', fontFamily: 'IBM Plex Mono, monospace', color: '#1f4e79' }}>
-                       {item.isSpirit ? (item.bottlesToOrder > 0 ? item.bottlesToOrder : '-') : '-'}
-                     </td>
-                    <td style={{ ...styles.td, textAlign: 'center' }}>
-                      <span style={{ display: 'inline-block', padding: '2px 10px', borderRadius: 99, fontSize: 11, fontWeight: 700, letterSpacing: '0.05em', background: p.badge, color: '#fff' }}>{item.priority}</span>
-                    </td>
-                    <td style={styles.td}>
-                      <EditText value={item.notes || ''} onChange={v => saveSetting(item.name, 'notes', v)}
-                        saving={saving[`${item.name}_notes`]} placeholder="Add note..." />
-                    </td>
-                    {viewMode === 'pricing' && (() => {
-                      const buy  = item.buyPrice  !== '' && item.buyPrice  != null ? Number(item.buyPrice)  : null
-                      const sell = item.sellPrice !== '' && item.sellPrice != null ? Number(item.sellPrice) : null
-                      const marginPct = (buy != null && sell != null && sell > 0) ? (((sell - buy) / sell) * 100) : null
-                      const marginStr = marginPct != null ? marginPct.toFixed(1) + '%' : '-'
-                      const marginColor = marginPct == null ? '#94a3b8' : marginPct >= 40 ? '#16a34a' : marginPct >= 20 ? '#d97706' : '#dc2626'
-                      const sellFromSq = item.squareSellPrice != null && Number(item.sellPrice) === item.squareSellPrice
-                      return <>
-                        <td style={{ ...styles.td, textAlign: 'right' }}>
-                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 1 }}>
-                            <EditNumber value={buy ?? ''} placeholder="$0.00" decimals={2} prefix="$"
-                              onChange={v => saveSetting(item.name, 'buyPrice', v)}
-                              saving={saving[`${item.name}_buyPrice`]} min={0} />
-
-                          </div>
-                        </td>
-                        <td style={{ ...styles.td, textAlign: 'right' }}>
-                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 1 }}>
-                            <EditNumber value={sell ?? ''} placeholder="$0.00" decimals={2} prefix="$"
-                              onChange={v => saveSetting(item.name, 'sellPrice', v)}
-                              saving={saving[`${item.name}_sellPrice`]} min={0} />
-                            {sellFromSq && <span style={{ fontSize: 9, color: '#94a3b8', fontFamily: 'IBM Plex Mono, monospace' }}>from Square</span>}
-                          </div>
-                        </td>
-                        <td style={{ ...styles.td, textAlign: 'right', fontWeight: 700, fontFamily: 'IBM Plex Mono, monospace', color: marginColor }}>
-                          {marginStr}
-                        </td>
-                      </>
-                    })()}
+            <div style={styles.tableWrap}>
+              <table style={styles.table}>
+                <thead>
+                  <tr style={styles.thead}>
+                    <th style={{ ...styles.th, width: 240 }}>Item</th>
+                    <th style={styles.th}>Category</th>
+                    <th style={styles.th}>Supplier</th>
+                    <th style={{ ...styles.th, textAlign: 'right' }}>On Hand</th>
+                    <th style={{ ...styles.th, textAlign: 'right' }}>Wkly Avg</th>
+                    <th style={{ ...styles.th, textAlign: 'right' }}>Target</th>
+                    <th style={{ ...styles.th, textAlign: 'center' }}>Pack</th>
+                    <th style={{ ...styles.th, textAlign: 'center' }}>Bottle Size</th>
+                    <th style={{ ...styles.th, textAlign: 'right' }}>Order Qty</th>
+                    <th style={{ ...styles.th, textAlign: 'right' }}>Bottles</th>
+                    <th style={{ ...styles.th, textAlign: 'center' }}>Priority</th>
+                    <th style={{ ...styles.th, width: 180 }}>Notes</th>
+                    {viewMode === 'pricing' && <>
+                      <th style={{ ...styles.th, textAlign: 'right', color: '#7c3aed' }}>Buy Price</th>
+                      <th style={{ ...styles.th, textAlign: 'right', color: '#7c3aed' }}>Sell Price</th>
+                      <th style={{ ...styles.th, textAlign: 'right', color: '#7c3aed' }}>Margin</th>
+                    </>}
                   </tr>
-                )
-              })}
-            </tbody>
-          </table>
-        </div>
+                </thead>
+                <tbody>
+                  {displayed.length === 0 && (
+                    <tr><td colSpan={viewMode === 'pricing' ? 15 : 12} style={{ textAlign: 'center', padding: '48px 24px', color: '#64748b' }}>
+                      {filterOrder ? 'No items to order this week.' : 'No items found.'}
+                    </td></tr>
+                  )}
+                  {displayed.map((item, idx) => {
+                    const p = PRIORITY_COLORS[item.priority]
+                    const rowBg = item.orderQty > 0 ? p.bg : (idx % 2 === 0 ? '#fff' : '#f8fafc')
+                    return (
+                      <tr key={item.name} style={{ background: rowBg }}>
+                        <td style={{ ...styles.td, fontWeight: 500, fontSize: 13 }}>{item.name}</td>
+                        <td style={styles.td}>
+                          <EditSelect value={item.category} options={CATEGORIES}
+                            onChange={v => saveSetting(item.name, 'category', v)}
+                            saving={saving[`${item.name}_category`]} />
+                        </td>
+                        <td style={styles.td}>
+                          <EditSelect value={item.supplier} options={suppliers}
+                            onChange={v => saveSetting(item.name, 'supplier', v)}
+                            saving={saving[`${item.name}_supplier`]} colorMap={SUPPLIER_COLORS} />
+                        </td>
+                        <td style={{ ...styles.td, textAlign: 'right', fontFamily: 'IBM Plex Mono, monospace' }}>{item.onHand}</td>
+                        <td style={{ ...styles.td, textAlign: 'right', fontFamily: 'IBM Plex Mono, monospace' }}>{item.weeklyAvg}</td>
+                        <td style={{ ...styles.td, textAlign: 'right', fontFamily: 'IBM Plex Mono, monospace' }}>{item.targetStock}</td>
+                        <td style={{ ...styles.td, textAlign: 'center' }}>
+                          <EditNumber value={item.pack} onChange={v => saveSetting(item.name, 'pack', v)}
+                            saving={saving[`${item.name}_pack`]} min={1} />
+                        </td>
+                        <td style={{ ...styles.td, textAlign: 'center' }}>
+                          {item.isSpirit ? (
+                            <EditSelect value={String(item.bottleML)} options={['700', '750', '1000']}
+                              onChange={v => saveSetting(item.name, 'bottleML', Number(v))}
+                              saving={saving[`${item.name}_bottleML`]} />
+                          ) : <span style={{ color: '#e2e8f0' }}>—</span>}
+                        </td>
+                        <td style={{ ...styles.td, textAlign: 'right', fontWeight: 700, fontFamily: 'IBM Plex Mono, monospace', fontSize: 15 }}>
+                          {item.isSpirit
+                            ? (item.nipsToOrder > 0 ? item.nipsToOrder : '-')
+                            : (item.orderQty > 0 ? item.orderQty : '-')}
+                        </td>
+                        <td style={{ ...styles.td, textAlign: 'right', fontFamily: 'IBM Plex Mono, monospace', color: '#1f4e79' }}>
+                          {item.isSpirit ? (item.bottlesToOrder > 0 ? item.bottlesToOrder : '-') : '-'}
+                        </td>
+                        <td style={{ ...styles.td, textAlign: 'center' }}>
+                          <span style={{ display: 'inline-block', padding: '2px 10px', borderRadius: 99, fontSize: 11, fontWeight: 700, letterSpacing: '0.05em', background: p.badge, color: '#fff' }}>{item.priority}</span>
+                        </td>
+                        <td style={styles.td}>
+                          <EditText value={item.notes || ''} onChange={v => saveSetting(item.name, 'notes', v)}
+                            saving={saving[`${item.name}_notes`]} placeholder="Add note..." />
+                        </td>
+                        {viewMode === 'pricing' && (() => {
+                          const buy  = item.buyPrice  !== '' && item.buyPrice  != null ? Number(item.buyPrice)  : null
+                          const sell = item.sellPrice !== '' && item.sellPrice != null ? Number(item.sellPrice) : null
+                          const marginPct = (buy != null && sell != null && sell > 0) ? (((sell - buy) / sell) * 100) : null
+                          const marginStr = marginPct != null ? marginPct.toFixed(1) + '%' : '-'
+                          const marginColor = marginPct == null ? '#94a3b8' : marginPct >= 40 ? '#16a34a' : marginPct >= 20 ? '#d97706' : '#dc2626'
+                          const sellFromSq = item.squareSellPrice != null && Number(item.sellPrice) === item.squareSellPrice
+                          return <>
+                            <td style={{ ...styles.td, textAlign: 'right' }}>
+                              <EditNumber value={buy ?? ''} placeholder="$0.00" decimals={2} prefix="$"
+                                onChange={v => saveSetting(item.name, 'buyPrice', v)}
+                                saving={saving[`${item.name}_buyPrice`]} min={0} />
+                            </td>
+                            <td style={{ ...styles.td, textAlign: 'right' }}>
+                              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 1 }}>
+                                <EditNumber value={sell ?? ''} placeholder="$0.00" decimals={2} prefix="$"
+                                  onChange={v => saveSetting(item.name, 'sellPrice', v)}
+                                  saving={saving[`${item.name}_sellPrice`]} min={0} />
+                                {sellFromSq && <span style={{ fontSize: 9, color: '#94a3b8', fontFamily: 'IBM Plex Mono, monospace' }}>from Square</span>}
+                              </div>
+                            </td>
+                            <td style={{ ...styles.td, textAlign: 'right', fontWeight: 700, fontFamily: 'IBM Plex Mono, monospace', color: marginColor }}>
+                              {marginStr}
+                            </td>
+                          </>
+                        })()}
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </>
+        )}
+
         <footer style={styles.footer}>
           Paynter Bar - GemLife Palmwoods | Data from Square POS | {items.length} items tracked
         </footer>
@@ -506,6 +528,189 @@ ${orderItems.length === 0 ? '<p style="color:#6b7280;margin-top:16px">No items t
   )
 }
 
+// ─── SALES REPORT VIEW ────────────────────────────────────────────────────────
+function SalesView({ period, setPeriod, custom, setCustom, report, loading, error, category, setCategory, sort, setSort, onLoad }) {
+  const fmt = n => n == null ? '-' : `$${Number(n).toFixed(2)}`
+
+  const fmtChange = n => {
+    if (n == null) return null
+    const sign = n >= 0 ? '+' : ''
+    const color = n >= 0 ? '#16a34a' : '#dc2626'
+    return <span style={{ fontSize: 11, color, fontWeight: 700 }}>{sign}{n}%</span>
+  }
+
+  const allCats = report
+    ? ['All', ...CATEGORY_ORDER_LIST.filter(c => report.categories[c])]
+    : ['All']
+
+  const filteredItems = report
+    ? report.items
+        .filter(i => category === 'All' || i.category === category)
+        .sort((a, b) => sort === 'revenue' ? ((b.revenue || 0) - (a.revenue || 0)) : (b.unitsSold - a.unitsSold))
+    : []
+
+  const totals = filteredItems.reduce(
+    (acc, i) => ({ units: acc.units + i.unitsSold, prev: acc.prev + i.prevSold, rev: acc.rev + (i.revenue || 0), prevRev: acc.prevRev + (i.prevRev || 0) }),
+    { units: 0, prev: 0, rev: 0, prevRev: 0 }
+  )
+
+  const hasRev = report && report.items.some(i => i.revenue != null)
+
+  return (
+    <div style={{ padding: '24px 32px' }}>
+      {/* Period controls */}
+      <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', marginBottom: 24, background: '#fff', padding: '16px 20px', borderBottom: '1px solid #e2e8f0' }}>
+        {[['month','This Month'],['3months','Last 3 Months'],['custom','Custom Range']].map(([val, label]) => (
+          <button key={val}
+            style={{ ...styles.tab, ...(period === val ? styles.tabActive : {}) }}
+            onClick={() => { setPeriod(val); if (val !== 'custom') onLoad(val, custom) }}>
+            {label}
+          </button>
+        ))}
+        {period === 'custom' && (
+          <>
+            <input type="date" value={custom.start} onChange={e => setCustom(c => ({ ...c, start: e.target.value }))}
+              style={{ ...styles.supplierInput, width: 140 }} />
+            <span style={{ color: '#64748b' }}>to</span>
+            <input type="date" value={custom.end} onChange={e => setCustom(c => ({ ...c, end: e.target.value }))}
+              style={{ ...styles.supplierInput, width: 140 }} />
+            <button style={{ ...styles.btn, padding: '6px 16px', fontSize: 13 }}
+              onClick={() => onLoad('custom', custom)}>Load</button>
+          </>
+        )}
+      </div>
+
+      {loading && (
+        <div style={{ textAlign: 'center', padding: 48, color: '#64748b' }}>
+          <div style={{ ...styles.spinner, margin: '0 auto 16px' }} />
+          Fetching sales data from Square...
+        </div>
+      )}
+
+      {error && <div style={styles.errorBox}><strong>Error:</strong> {error}</div>}
+
+      {report && !loading && (
+        <>
+          {/* Summary cards */}
+          <div style={{ display: 'flex', gap: 16, marginBottom: 24, flexWrap: 'wrap' }}>
+            {[
+              { label: 'Units Sold',   value: totals.units,            prev: totals.prev,   money: false },
+              ...(hasRev ? [{ label: 'Revenue', value: fmt(totals.rev), prev: totals.prevRev, money: true, rawVal: totals.rev, rawPrev: totals.prevRev }] : []),
+              { label: 'Items Sold',  value: filteredItems.filter(i => i.unitsSold > 0).length, noChange: true },
+              { label: 'Top Seller',  value: (filteredItems[0]?.name || '-').split(' ').slice(0,3).join(' '), noChange: true },
+            ].map(({ label, value, prev, money, rawVal, rawPrev, noChange }) => {
+              const numVal  = money ? (rawVal  ?? 0) : value
+              const numPrev = money ? (rawPrev ?? 0) : prev
+              const chg = (!noChange && numPrev > 0) ? +(((numVal - numPrev) / numPrev) * 100).toFixed(1) : null
+              return (
+                <div key={label} style={{ background: '#fff', borderRadius: 12, border: '1px solid #e2e8f0', padding: '20px 24px', minWidth: 150, flex: 1 }}>
+                  <div style={{ fontSize: 11, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>{label}</div>
+                  <div style={{ fontSize: 26, fontWeight: 700, fontFamily: 'IBM Plex Mono, monospace', color: '#0f172a' }}>{value}</div>
+                  {!noChange && prev != null && (
+                    <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 4 }}>
+                      Prior: {money ? fmt(rawPrev) : prev}
+                      {chg != null && <span style={{ marginLeft: 6, color: chg >= 0 ? '#16a34a' : '#dc2626', fontWeight: 700 }}>{chg >= 0 ? '+' : ''}{chg}%</span>}
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+
+          {/* Category bar */}
+          <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #e2e8f0', padding: '20px 24px', marginBottom: 24, overflowX: 'auto' }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 14 }}>Category Breakdown — click to filter</div>
+            <div style={{ display: 'flex', gap: 0, minWidth: 'max-content' }}>
+              {CATEGORY_ORDER_LIST.filter(c => report.categories[c]).map(c => {
+                const cat = report.categories[c]
+                const pct = report.totals.unitsSold > 0 ? Math.round((cat.unitsSold / report.totals.unitsSold) * 100) : 0
+                const active = category === c
+                return (
+                  <button key={c} onClick={() => setCategory(active ? 'All' : c)}
+                    style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', padding: '10px 16px', cursor: 'pointer', border: 'none', borderBottom: `3px solid ${active ? '#2563eb' : '#e2e8f0'}`, background: active ? '#eff6ff' : 'transparent', minWidth: 110 }}>
+                    <span style={{ fontSize: 10, color: '#94a3b8', marginBottom: 2 }}>{c}</span>
+                    <span style={{ fontSize: 20, fontWeight: 700, fontFamily: 'IBM Plex Mono, monospace', color: '#0f172a' }}>{cat.unitsSold}</span>
+                    <span style={{ fontSize: 10, color: '#94a3b8' }}>{pct}%</span>
+                    {hasRev && cat.revenue > 0 && <span style={{ fontSize: 10, color: '#16a34a', fontWeight: 600 }}>{fmt(cat.revenue)}</span>}
+                  </button>
+                )
+              })}
+              <button onClick={() => setCategory('All')}
+                style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', padding: '10px 16px', cursor: 'pointer', border: 'none', borderBottom: `3px solid ${category === 'All' ? '#2563eb' : '#e2e8f0'}`, background: category === 'All' ? '#eff6ff' : 'transparent', minWidth: 80 }}>
+                <span style={{ fontSize: 10, color: '#94a3b8', marginBottom: 2 }}>ALL</span>
+                <span style={{ fontSize: 20, fontWeight: 700, fontFamily: 'IBM Plex Mono, monospace', color: '#0f172a' }}>{report.totals.unitsSold}</span>
+                <span style={{ fontSize: 10, color: '#94a3b8' }}>100%</span>
+                {hasRev && <span style={{ fontSize: 10, color: '#16a34a', fontWeight: 600 }}>{fmt(report.totals.revenue)}</span>}
+              </button>
+            </div>
+          </div>
+
+          {/* Item table */}
+          <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #e2e8f0', overflow: 'hidden' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 20px', borderBottom: '1px solid #e2e8f0' }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: '#0f172a' }}>
+                {category === 'All' ? 'All Items' : category} — {filteredItems.filter(i => i.unitsSold > 0).length} items sold
+              </div>
+              <div style={{ display: 'flex', gap: 6 }}>
+                <span style={{ fontSize: 12, color: '#64748b', alignSelf: 'center' }}>Sort:</span>
+                {[['units','By Units'],['revenue','By Revenue']].map(([val, label]) => (
+                  (!hasRev && val === 'revenue') ? null :
+                  <button key={val}
+                    style={{ ...styles.tab, padding: '4px 12px', fontSize: 12, ...(sort === val ? styles.tabActive : {}) }}
+                    onClick={() => setSort(val)}>{label}</button>
+                ))}
+              </div>
+            </div>
+            <div style={{ overflowX: 'auto', overflowY: 'auto', maxHeight: 'calc(100vh - 500px)' }}>
+              <table style={{ ...styles.table, fontSize: 13 }}>
+                <thead>
+                  <tr style={styles.thead}>
+                    <th style={{ ...styles.th, width: 28, textAlign: 'right' }}>#</th>
+                    <th style={styles.th}>Item</th>
+                    <th style={styles.th}>Category</th>
+                    <th style={{ ...styles.th, textAlign: 'right' }}>Units Sold</th>
+                    <th style={{ ...styles.th, textAlign: 'right' }}>Prior Period</th>
+                    <th style={{ ...styles.th, textAlign: 'right' }}>Change</th>
+                    {hasRev && <th style={{ ...styles.th, textAlign: 'right', color: '#16a34a' }}>Revenue</th>}
+                    {hasRev && <th style={{ ...styles.th, textAlign: 'right', color: '#94a3b8' }}>Prior Rev</th>}
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredItems.filter(i => i.unitsSold > 0 || i.prevSold > 0).map((item, idx) => (
+                    <tr key={item.name} style={{ background: idx % 2 === 0 ? '#fff' : '#f8fafc' }}>
+                      <td style={{ ...styles.td, textAlign: 'right', color: '#94a3b8', fontSize: 11 }}>{idx + 1}</td>
+                      <td style={{ ...styles.td, fontWeight: 500 }}>{item.name}</td>
+                      <td style={{ ...styles.td, color: '#64748b', fontSize: 12 }}>{item.category}</td>
+                      <td style={{ ...styles.td, textAlign: 'right', fontFamily: 'IBM Plex Mono, monospace', fontWeight: 700, fontSize: 15, color: '#0f172a' }}>
+                        {item.unitsSold || <span style={{ color: '#cbd5e1' }}>—</span>}
+                      </td>
+                      <td style={{ ...styles.td, textAlign: 'right', fontFamily: 'IBM Plex Mono, monospace', color: '#64748b' }}>{item.prevSold || 0}</td>
+                      <td style={{ ...styles.td, textAlign: 'right' }}>{fmtChange(item.change)}</td>
+                      {hasRev && <td style={{ ...styles.td, textAlign: 'right', fontFamily: 'IBM Plex Mono, monospace', color: '#16a34a', fontWeight: 600 }}>{fmt(item.revenue)}</td>}
+                      {hasRev && <td style={{ ...styles.td, textAlign: 'right', fontFamily: 'IBM Plex Mono, monospace', color: '#94a3b8' }}>{fmt(item.prevRev)}</td>}
+                    </tr>
+                  ))}
+                  <tr style={{ background: '#f1f5f9' }}>
+                    <td style={styles.td} />
+                    <td style={{ ...styles.td, fontWeight: 700, fontSize: 13 }}>TOTAL</td>
+                    <td style={styles.td} />
+                    <td style={{ ...styles.td, textAlign: 'right', fontFamily: 'IBM Plex Mono, monospace', fontWeight: 700, fontSize: 15 }}>{totals.units}</td>
+                    <td style={{ ...styles.td, textAlign: 'right', fontFamily: 'IBM Plex Mono, monospace', color: '#64748b' }}>{totals.prev}</td>
+                    <td style={styles.td} />
+                    {hasRev && <td style={{ ...styles.td, textAlign: 'right', fontFamily: 'IBM Plex Mono, monospace', fontWeight: 700, color: '#16a34a' }}>{fmt(totals.rev)}</td>}
+                    {hasRev && <td style={{ ...styles.td, textAlign: 'right', fontFamily: 'IBM Plex Mono, monospace', color: '#94a3b8' }}>{fmt(totals.prevRev)}</td>}
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
+// ─── EDIT COMPONENTS ──────────────────────────────────────────────────────────
 function EditSelect({ value, options, onChange, saving, colorMap }) {
   const [editing, setEditing] = useState(false)
   if (saving) return <span style={{ color: '#94a3b8', fontSize: 12 }}>Saving...</span>
@@ -558,41 +763,42 @@ function EditText({ value, onChange, saving, placeholder }) {
     onClick={() => setEditing(true)} title="Click to edit">{value || placeholder}</span>
 }
 
+// ─── STYLES ───────────────────────────────────────────────────────────────────
 const styles = {
-  page: { minHeight: '100vh', background: '#f1f5f9', fontFamily: "'IBM Plex Sans', sans-serif" },
-  loadWrap: { display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', background: '#f1f5f9' },
-  loadBox: { textAlign: 'center' },
-  spinner: { width: 40, height: 40, border: '3px solid #e2e8f0', borderTop: '3px solid #1f4e79', borderRadius: '50%', animation: 'spin 1s linear infinite', margin: '0 auto' },
-  header: { background: '#0f172a', color: '#fff' },
-  headerInner: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '24px 32px 16px', flexWrap: 'wrap', gap: 16 },
-  headerTop: { display: 'flex', alignItems: 'center', gap: 12, marginBottom: 4 },
-  logo: { fontSize: 11, fontWeight: 700, letterSpacing: '0.2em', color: '#94a3b8', textTransform: 'uppercase', fontFamily: "'IBM Plex Mono', monospace" },
-  logoSub: { fontSize: 11, color: '#475569', fontFamily: "'IBM Plex Mono', monospace" },
-  title: { fontSize: 26, fontWeight: 700, margin: 0, color: '#f8fafc', letterSpacing: '-0.02em' },
-  headerRight: { display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 8 },
-  lastUpdated: { fontSize: 12, color: '#64748b', fontFamily: "'IBM Plex Mono', monospace" },
-  btn: { background: '#2563eb', color: '#fff', border: 'none', borderRadius: 6, padding: '8px 18px', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: "'IBM Plex Sans', sans-serif" },
-  btnDisabled: { background: '#334155', cursor: 'not-allowed' },
-  statsBar: { display: 'flex', borderTop: '1px solid #1e293b', padding: '0 32px' },
-  stat: { display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '12px 24px', borderRight: '1px solid #1e293b', gap: 2, borderTopWidth: 3, borderTopStyle: 'solid', borderTopColor: 'transparent' },
-  statNum: { fontSize: 22, fontWeight: 700, fontFamily: "'IBM Plex Mono', monospace", color: '#f8fafc' },
-  statLabel: { fontSize: 11, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.08em' },
-  targetInput: { width: 50, fontSize: 20, fontWeight: 700, fontFamily: "'IBM Plex Mono', monospace", background: '#1e293b', color: '#f8fafc', border: '1px solid #475569', borderRadius: 4, textAlign: 'center', padding: '2px 4px' },
-  errorBox: { background: '#fee2e2', border: '1px solid #fca5a5', color: '#991b1b', margin: '16px 32px', padding: '12px 16px', borderRadius: 6, fontSize: 13 },
-  controls: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 32px', background: '#fff', borderBottom: '1px solid #e2e8f0', flexWrap: 'wrap', gap: 12 },
-  viewTabs: { display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' },
-  tab: { padding: '6px 14px', borderRadius: 6, border: '1px solid #cbd5e1', background: '#f8fafc', color: '#374151', fontSize: 13, fontWeight: 500, cursor: 'pointer', fontFamily: "'IBM Plex Sans', sans-serif" },
-  tabActive: { background: '#0f172a', color: '#fff', borderColor: '#0f172a' },
-  filterCheck: { display: 'flex', alignItems: 'center', fontSize: 13, color: '#374151', cursor: 'pointer' },
+  page:          { minHeight: '100vh', background: '#f1f5f9', fontFamily: "'IBM Plex Sans', sans-serif" },
+  loadWrap:      { display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', background: '#f1f5f9' },
+  loadBox:       { textAlign: 'center' },
+  spinner:       { width: 40, height: 40, border: '3px solid #e2e8f0', borderTop: '3px solid #1f4e79', borderRadius: '50%', animation: 'spin 1s linear infinite', margin: '0 auto' },
+  header:        { background: '#0f172a', color: '#fff' },
+  headerInner:   { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '24px 32px 16px', flexWrap: 'wrap', gap: 16 },
+  headerTop:     { display: 'flex', alignItems: 'center', gap: 12, marginBottom: 4 },
+  logo:          { fontSize: 11, fontWeight: 700, letterSpacing: '0.2em', color: '#94a3b8', textTransform: 'uppercase', fontFamily: "'IBM Plex Mono', monospace" },
+  logoSub:       { fontSize: 11, color: '#475569', fontFamily: "'IBM Plex Mono', monospace" },
+  title:         { fontSize: 26, fontWeight: 700, margin: 0, color: '#f8fafc', letterSpacing: '-0.02em' },
+  headerRight:   { display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 8 },
+  lastUpdated:   { fontSize: 12, color: '#64748b', fontFamily: "'IBM Plex Mono', monospace" },
+  btn:           { background: '#2563eb', color: '#fff', border: 'none', borderRadius: 6, padding: '8px 18px', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: "'IBM Plex Sans', sans-serif" },
+  btnDisabled:   { background: '#334155', cursor: 'not-allowed' },
+  statsBar:      { display: 'flex', borderTop: '1px solid #1e293b', padding: '0 32px' },
+  stat:          { display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '12px 24px', borderRight: '1px solid #1e293b', gap: 2, borderTopWidth: 3, borderTopStyle: 'solid', borderTopColor: 'transparent' },
+  statNum:       { fontSize: 22, fontWeight: 700, fontFamily: "'IBM Plex Mono', monospace", color: '#f8fafc' },
+  statLabel:     { fontSize: 11, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.08em' },
+  targetInput:   { width: 50, fontSize: 20, fontWeight: 700, fontFamily: "'IBM Plex Mono', monospace", background: '#1e293b', color: '#f8fafc', border: '1px solid #475569', borderRadius: 4, textAlign: 'center', padding: '2px 4px' },
+  errorBox:      { background: '#fee2e2', border: '1px solid #fca5a5', color: '#991b1b', margin: '16px 32px', padding: '12px 16px', borderRadius: 6, fontSize: 13 },
+  controls:      { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 32px', background: '#fff', borderBottom: '1px solid #e2e8f0', flexWrap: 'wrap', gap: 12 },
+  viewTabs:      { display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' },
+  tab:           { padding: '6px 14px', borderRadius: 6, border: '1px solid #cbd5e1', background: '#f8fafc', color: '#374151', fontSize: 13, fontWeight: 500, cursor: 'pointer', fontFamily: "'IBM Plex Sans', sans-serif" },
+  tabActive:     { background: '#0f172a', color: '#fff', borderColor: '#0f172a' },
+  filterCheck:   { display: 'flex', alignItems: 'center', fontSize: 13, color: '#374151', cursor: 'pointer' },
   supplierInput: { fontSize: 13, border: '1px solid #3b82f6', borderRadius: 6, padding: '6px 10px', fontFamily: "'IBM Plex Sans', sans-serif", width: 160 },
-  dropdown: { position: 'absolute', top: '100%', right: 0, marginTop: 4, background: '#fff', border: '1px solid #e2e8f0', borderRadius: 8, boxShadow: '0 4px 12px rgba(0,0,0,0.1)', zIndex: 100, minWidth: 200 },
-  dropItem: { display: 'block', width: '100%', padding: '10px 16px', background: 'none', border: 'none', textAlign: 'left', cursor: 'pointer', fontSize: 13, color: '#374151', fontFamily: "'IBM Plex Sans', sans-serif" },
-  tableWrap: { overflowX: 'auto', overflowY: 'auto', maxHeight: 'calc(100vh - 220px)' },
-  table: { width: '100%', borderCollapse: 'collapse', fontSize: 13, background: '#fff' },
-  thead: { background: '#f8fafc', position: 'sticky', top: 0, zIndex: 10 },
-  th: { padding: '10px 14px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.08em', borderBottom: '2px solid #e2e8f0', whiteSpace: 'nowrap' },
-  td: { padding: '9px 14px', borderBottom: '1px solid #f1f5f9', verticalAlign: 'middle' },
-  inlineSelect: { fontSize: 12, border: '1px solid #3b82f6', borderRadius: 4, padding: '2px 4px', background: '#eff6ff', color: '#1d4ed8', fontFamily: "'IBM Plex Sans', sans-serif" },
-  inlineInput: { width: 70, fontSize: 13, border: '1px solid #3b82f6', borderRadius: 4, padding: '2px 6px', background: '#eff6ff', color: '#1d4ed8', textAlign: 'center', fontFamily: "'IBM Plex Mono', monospace" },
-  footer: { textAlign: 'center', padding: '24px', fontSize: 12, color: '#94a3b8', borderTop: '1px solid #e2e8f0', background: '#fff' }
+  dropdown:      { position: 'absolute', top: '100%', right: 0, marginTop: 4, background: '#fff', border: '1px solid #e2e8f0', borderRadius: 8, boxShadow: '0 4px 12px rgba(0,0,0,0.1)', zIndex: 100, minWidth: 200 },
+  dropItem:      { display: 'block', width: '100%', padding: '10px 16px', background: 'none', border: 'none', textAlign: 'left', cursor: 'pointer', fontSize: 13, color: '#374151', fontFamily: "'IBM Plex Sans', sans-serif" },
+  tableWrap:     { overflowX: 'auto', overflowY: 'auto', maxHeight: 'calc(100vh - 220px)' },
+  table:         { width: '100%', borderCollapse: 'collapse', fontSize: 13, background: '#fff' },
+  thead:         { background: '#f8fafc', position: 'sticky', top: 0, zIndex: 10 },
+  th:            { padding: '10px 14px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.08em', borderBottom: '2px solid #e2e8f0', whiteSpace: 'nowrap' },
+  td:            { padding: '9px 14px', borderBottom: '1px solid #f1f5f9', verticalAlign: 'middle' },
+  inlineSelect:  { fontSize: 12, border: '1px solid #3b82f6', borderRadius: 4, padding: '2px 4px', background: '#eff6ff', color: '#1d4ed8', fontFamily: "'IBM Plex Sans', sans-serif" },
+  inlineInput:   { width: 70, fontSize: 13, border: '1px solid #3b82f6', borderRadius: 4, padding: '2px 6px', background: '#eff6ff', color: '#1d4ed8', textAlign: 'center', fontFamily: "'IBM Plex Mono', monospace" },
+  footer:        { textAlign: 'center', padding: '24px', fontSize: 12, color: '#94a3b8', borderTop: '1px solid #e2e8f0', background: '#fff' },
 }
