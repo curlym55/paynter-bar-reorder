@@ -403,7 +403,6 @@ ${orderItems.length === 0 ? '<p style="color:#6b7280;margin-top:16px">No items t
                 <th style={{ ...styles.th, textAlign: 'center' }}>Bottle Size</th>
                 <th style={{ ...styles.th, textAlign: 'right' }}>Order Qty</th>
                 <th style={{ ...styles.th, textAlign: 'right' }}>Bottles</th>
-                <th style={{ ...styles.th, textAlign: 'right' }}>Nips</th>
                 <th style={{ ...styles.th, textAlign: 'center' }}>Priority</th>
                 <th style={{ ...styles.th, width: 180 }}>Notes</th>
                 {viewMode === 'pricing' && <>
