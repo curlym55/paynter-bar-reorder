@@ -19,10 +19,22 @@ export default async function handler(req, res) {
         ? { ...item, onHand: settings.stockOverride }
         : item
       const calculated = calculateItem(effectiveItem, settings, targetWeeks)
+      // Prices: Redis override wins, fall back to Square catalog price
+      const buyPrice  = settings.buyPrice  !== undefined && settings.buyPrice  !== ''
+        ? settings.buyPrice
+        : (item.squareBuyPrice  ?? '')
+      const sellPrice = settings.sellPrice !== undefined && settings.sellPrice !== ''
+        ? settings.sellPrice
+        : (item.squareSellPrice ?? '')
+
       return {
         ...calculated,
         stockOverride: settings.stockOverride ?? null,
-        notes: settings.notes || '',
+        notes:      settings.notes || '',
+        buyPrice,
+        sellPrice,
+        squareBuyPrice:  item.squareBuyPrice  ?? null,
+        squareSellPrice: item.squareSellPrice ?? null,
       }
     })
 
