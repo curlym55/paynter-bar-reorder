@@ -193,33 +193,37 @@ export default function Home() {
     setTrendError(null)
     try {
       const now = new Date()
-      // Build 4 quarters ending at the most recent completed quarter
-      // Quarter end months: Jan, Apr, Jul, Oct
+      const yr  = now.getFullYear()
+      const mo  = now.getMonth() // 0-indexed
+
+      // Build last 4 calendar quarters (Jan-Mar, Apr-Jun, Jul-Sep, Oct-Dec)
+      // Work out which quarter we're currently in, then go back 4 from the last completed one
+      // Quarter index: 0=Jan-Mar, 1=Apr-Jun, 2=Jul-Sep, 3=Oct-Dec
+      const currentQ = Math.floor(mo / 3)
+      // Last completed quarter
+      let q = currentQ - 1
+      let y = yr
+      if (q < 0) { q = 3; y = yr - 1 }
+
       const quarters = []
-      let qEnd = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59)
-      // Step back to last quarter boundary
-      const qEndMonths = [0, 3, 6, 9] // Jan, Apr, Jul, Oct (0-indexed)
-      while (!qEndMonths.includes(qEnd.getMonth())) {
-        qEnd = new Date(qEnd.getFullYear(), qEnd.getMonth(), 0, 23, 59, 59)
-      }
       for (let i = 0; i < 4; i++) {
-        const end   = new Date(qEnd)
-        const start = new Date(qEnd.getFullYear(), qEnd.getMonth() - 2, 1, 0, 0, 0)
-        quarters.unshift({ start, end })
-        qEnd = new Date(start.getTime() - 1)
-        // Step back to last quarter boundary
-        while (!qEndMonths.includes(qEnd.getMonth())) {
-          qEnd = new Date(qEnd.getFullYear(), qEnd.getMonth(), 0, 23, 59, 59)
-        }
+        const startMonth = q * 3           // 0, 3, 6, or 9
+        const endMonth   = startMonth + 2  // 2, 5, 8, or 11
+        const lastDay    = new Date(y, endMonth + 1, 0).getDate()
+        const start      = new Date(y, startMonth, 1, 0, 0, 0)
+        const end        = new Date(y, endMonth, lastDay, 23, 59, 59)
+        const qNames     = ['Jan–Mar','Apr–Jun','Jul–Sep','Oct–Dec']
+        quarters.unshift({ start, end, label: `${qNames[q]} ${y}` })
+        q--
+        if (q < 0) { q = 3; y-- }
       }
 
-      // Fetch all 4 quarters in parallel
       const results = await Promise.all(quarters.map(async q => {
         const params = new URLSearchParams({ start: q.start.toISOString(), end: q.end.toISOString() })
         const r = await fetch(`/api/sales?${params}`)
         if (!r.ok) throw new Error('Failed to fetch quarter data')
-        const data = await r.json()
-        return { ...q, categories: data.categories, totals: data.totals }
+        const d = await r.json()
+        return { label: q.label, categories: d.categories, totals: d.totals }
       }))
       setTrendData(results)
     } catch(e) {
@@ -928,7 +932,7 @@ ${orderItems.length === 0 ? '<p style="color:#6b7280;margin-top:16px">No items t
                 <button style={{ ...styles.btn, background: '#065f46' }} onClick={generateSalesReport} title="Monthly Sales PDF">📈 Sales PDF</button>
                 <button style={{ ...styles.btn, background: '#7e22ce' }} onClick={generateAGMReport} title="Annual AGM Report (May–April)">📑 AGM PDF</button>
                 <button style={{ ...styles.btn, background: mainTab === 'trends' ? '#b45309' : '#92400e' }}
-                  onClick={() => { setMainTab(t => { const next = t === 'trends' ? 'reorder' : 'trends'; if (next === 'trends' && !trendData) loadTrendData(); return next; }) }}>
+                  onClick={() => { const next = mainTab === 'trends' ? 'reorder' : 'trends'; setMainTab(next); if (next === 'trends' && !trendData) loadTrendData(); }}>
                   {mainTab === 'trends' ? '← Back' : '📈 Trends'}
                 </button>
                 <button style={{ ...styles.btn, background: mainTab === 'sales' ? '#7c3aed' : '#4b5563' }}
