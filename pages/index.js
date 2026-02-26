@@ -1424,6 +1424,17 @@ function HelpTab() {
         { q: 'Square POS connection', a: 'The app connects to your Square account via API. Stock levels and sales update on every Refresh. Square remains the source of truth — all transactions happen through Square as normal.' },
       ]
     },
+    {
+      icon: '👁',
+      title: 'Access Levels',
+      items: [
+        { q: 'Committee access (PIN 3838)', a: 'Full access to all features including editing item settings, changing categories, suppliers, pack sizes, bottle and nip sizes, buy and sell prices, notes, and target weeks. Can also export the stocktake spreadsheet and add suppliers.' },
+        { q: 'Homeowners committee (PIN 5554)', a: 'Read-only access. All data is visible — stock levels, order quantities, sales reports, trends charts and PDF reports — but nothing can be edited or changed. A READ ONLY badge is shown in the header when logged in with this PIN.' },
+        { q: 'What read-only users can view', a: 'Stock on hand, weekly averages, order quantities, item status (Critical/Low/OK), sales reports, quarterly trends, category breakdowns, top sellers, and all PDF reports including the AGM annual report.' },
+        { q: 'What read-only users cannot do', a: 'Edit any item settings (category, supplier, pack size, bottle size, nip size, notes), change buy or sell prices, export the stocktake spreadsheet, add suppliers, or change the target weeks stock level.' },
+        { q: 'Pricing visibility', a: 'Buy and sell prices are only visible to committee members (PIN 3838). The $ Pricing view is hidden entirely for read-only users to keep cost prices confidential.' },
+      ]
+    },
   ]
 
   return (
