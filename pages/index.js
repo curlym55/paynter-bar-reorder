@@ -183,6 +183,303 @@ export default function Home() {
     })
   }
 
+  function generateStockReport() {
+    const date = new Date()
+    const monthName = date.toLocaleDateString('en-AU', { month: 'long', year: 'numeric' })
+    const generated = date.toLocaleString('en-AU', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+
+    // Group by category
+    const byCategory = {}
+    for (const item of items) {
+      const cat = item.category || 'Uncategorised'
+      if (!byCategory[cat]) byCategory[cat] = []
+      byCategory[cat].push(item)
+    }
+
+    const CATEGORY_ORDER = ['Beer','Cider','PreMix','White Wine','Red Wine','Rose','Sparkling','Fortified & Liqueurs','Spirits','Soft Drinks','Snacks']
+    const sortedCats = [...CATEGORY_ORDER.filter(c => byCategory[c]), ...Object.keys(byCategory).filter(c => !CATEGORY_ORDER.includes(c))]
+
+    const critItems  = items.filter(i => i.priority === 'CRITICAL')
+    const lowItems   = items.filter(i => i.priority === 'LOW')
+    const orderItems = items.filter(i => i.orderQty > 0)
+
+    let categorySections = ''
+    for (const cat of sortedCats) {
+      const catItems = byCategory[cat].sort((a, b) => a.name.localeCompare(b.name))
+      const rows = catItems.map(item => {
+        const priorityColor = item.priority === 'CRITICAL' ? '#dc2626' : item.priority === 'LOW' ? '#ca8a04' : '#16a34a'
+        const rowBg = item.priority === 'CRITICAL' ? '#fff5f5' : item.priority === 'LOW' ? '#fffbeb' : '#fff'
+        const orderQty = item.isSpirit
+          ? (item.nipsToOrder > 0 ? `${item.nipsToOrder} nips (${item.bottlesToOrder} btl)` : '—')
+          : (item.orderQty > 0 ? item.orderQty : '—')
+        return `<tr style="background:${rowBg}">
+          <td>${item.name}</td>
+          <td style="text-align:right;font-family:monospace">${item.onHand}</td>
+          <td style="text-align:right;font-family:monospace">${item.weeklyAvg}</td>
+          <td style="text-align:right;font-family:monospace">${item.targetStock}</td>
+          <td style="text-align:center;color:${priorityColor};font-weight:700;font-size:11px">${item.priority}</td>
+          <td style="text-align:right;font-weight:${item.orderQty > 0 ? '700' : '400'}">${orderQty}</td>
+          <td style="color:#64748b;font-size:11px">${item.supplier || ''}</td>
+        </tr>`
+      }).join('')
+      categorySections += `
+        <tr class="cat-header"><td colspan="7">${cat} <span style="font-weight:400;font-size:11px">(${catItems.length} items)</span></td></tr>
+        ${rows}
+        <tr class="spacer"><td colspan="7"></td></tr>`
+    }
+
+    const html = `<!DOCTYPE html><html><head><title>Stock on Hand — ${monthName}</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: Arial, sans-serif; font-size: 12px; color: #1f2937; background: #fff; }
+  .page { padding: 28px 32px; }
+  .header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 3px solid #0f172a; padding-bottom: 14px; margin-bottom: 20px; }
+  .header-left h1 { font-size: 20px; font-weight: 700; color: #0f172a; }
+  .header-left p { font-size: 11px; color: #64748b; margin-top: 3px; }
+  .header-right { text-align: right; font-size: 11px; color: #64748b; line-height: 1.6; }
+  .header-right strong { color: #0f172a; font-size: 13px; display: block; }
+  .summary { display: flex; gap: 0; border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden; margin-bottom: 22px; }
+  .summary-card { flex: 1; padding: 12px 16px; border-right: 1px solid #e2e8f0; }
+  .summary-card:last-child { border-right: none; }
+  .summary-card .num { font-size: 22px; font-weight: 700; font-family: monospace; color: #0f172a; }
+  .summary-card .lbl { font-size: 10px; color: #64748b; text-transform: uppercase; letter-spacing: 0.06em; margin-top: 2px; }
+  .summary-card.crit .num { color: #dc2626; }
+  .summary-card.low .num  { color: #ca8a04; }
+  .summary-card.ord .num  { color: #2563eb; }
+  table { width: 100%; border-collapse: collapse; }
+  th { background: #0f172a; color: #fff; padding: 7px 10px; text-align: left; font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; }
+  th:nth-child(2), th:nth-child(3), th:nth-child(4), th:nth-child(6) { text-align: right; }
+  td { padding: 6px 10px; border-bottom: 1px solid #f1f5f9; font-size: 11px; }
+  tr.cat-header td { background: #f1f5f9; font-weight: 700; font-size: 11px; color: #374151; padding: 8px 10px; border-top: 2px solid #e2e8f0; text-transform: uppercase; letter-spacing: 0.04em; }
+  tr.spacer td { height: 4px; background: #fff; border: none; }
+  .footer { margin-top: 24px; padding-top: 12px; border-top: 1px solid #e2e8f0; font-size: 10px; color: #94a3b8; display: flex; justify-content: space-between; }
+  @media print {
+    body { font-size: 11px; }
+    .page { padding: 16px; }
+    tr { page-break-inside: avoid; }
+    tr.cat-header { page-break-before: auto; }
+  }
+</style>
+</head><body><div class="page">
+  <div class="header">
+    <div class="header-left">
+      <h1>Stock on Hand Report</h1>
+      <p>Paynter Bar — GemLife Palmwoods</p>
+    </div>
+    <div class="header-right">
+      <strong>${monthName}</strong>
+      Generated: ${generated}<br>
+      Sales period: ${daysBack} days<br>
+      Target: ${targetWeeks} weeks stock
+    </div>
+  </div>
+  <div class="summary">
+    <div class="summary-card"><div class="num">${items.length}</div><div class="lbl">Total Items</div></div>
+    <div class="summary-card crit"><div class="num">${critItems.length}</div><div class="lbl">Critical Stock</div></div>
+    <div class="summary-card low"><div class="num">${lowItems.length}</div><div class="lbl">Low Stock</div></div>
+    <div class="summary-card ord"><div class="num">${orderItems.length}</div><div class="lbl">Items to Order</div></div>
+  </div>
+  <table>
+    <thead><tr>
+      <th>Item</th><th>On Hand</th><th>Wkly Avg</th><th>Target</th><th style="text-align:center">Status</th><th>Order Qty</th><th>Supplier</th>
+    </tr></thead>
+    <tbody>${categorySections}</tbody>
+  </table>
+  <div class="footer">
+    <span>Paynter Bar Reorder System — Data from Square POS</span>
+    <span>Page 1</span>
+  </div>
+</div></body></html>`
+
+    const w = window.open('', '_blank')
+    w.document.write(html)
+    w.document.close()
+    w.focus()
+    setTimeout(() => w.print(), 600)
+  }
+
+  async function generateSalesReport() {
+    const now   = new Date()
+    // Last completed month
+    const end   = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59) // last day of prev month
+    const start = new Date(end.getFullYear(), end.getMonth(), 1, 0, 0, 0)
+    const monthName = start.toLocaleDateString('en-AU', { month: 'long', year: 'numeric' })
+    const generated = now.toLocaleString('en-AU', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+
+    // Compare to month before
+    const compareEnd   = new Date(start.getTime() - 1)
+    const compareStart = new Date(compareEnd.getFullYear(), compareEnd.getMonth(), 1)
+
+    const params = new URLSearchParams({
+      start: start.toISOString(), end: end.toISOString(),
+      compareStart: compareStart.toISOString(), compareEnd: compareEnd.toISOString(),
+    })
+
+    let report
+    try {
+      const r = await fetch(`/api/sales?${params}`)
+      if (!r.ok) throw new Error('Failed to fetch sales data')
+      report = await r.json()
+    } catch(e) {
+      alert('Could not fetch sales data: ' + e.message)
+      return
+    }
+
+    const CATEGORY_ORDER = ['Beer','Cider','PreMix','White Wine','Red Wine','Rose','Sparkling','Fortified & Liqueurs','Spirits','Soft Drinks','Snacks']
+    const hasRev = report.items.some(i => i.revenue != null && i.revenue > 0)
+
+    const fmtRev = n => n ? `$${Number(n).toFixed(2)}` : '—'
+    const fmtChg = n => {
+      if (n == null) return '—'
+      return (n >= 0 ? '+' : '') + n + '%'
+    }
+
+    // Top 10
+    const top10 = report.items.filter(i => i.unitsSold > 0).slice(0, 10)
+    const top10Rows = top10.map((item, idx) => `
+      <tr style="background:${idx % 2 === 0 ? '#fff' : '#f8fafc'}">
+        <td style="text-align:center;color:#94a3b8;font-size:10px">${idx + 1}</td>
+        <td>${item.name}</td>
+        <td style="color:#64748b;font-size:11px">${item.category}</td>
+        <td style="text-align:right;font-family:monospace;font-weight:700">${item.unitsSold}</td>
+        <td style="text-align:right;font-family:monospace;color:#64748b">${item.prevSold || 0}</td>
+        <td style="text-align:right;font-family:monospace;color:${item.change >= 0 ? '#16a34a' : '#dc2626'};font-weight:600">${fmtChg(item.change)}</td>
+        ${hasRev ? `<td style="text-align:right;font-family:monospace;color:#16a34a">${fmtRev(item.revenue)}</td>` : ''}
+      </tr>`).join('')
+
+    // Category breakdown
+    const catRows = CATEGORY_ORDER
+      .filter(c => report.categories[c])
+      .map((c, idx) => {
+        const cat = report.categories[c]
+        const pct = report.totals.unitsSold > 0 ? ((cat.unitsSold / report.totals.unitsSold) * 100).toFixed(1) : 0
+        const chg = cat.prevSold > 0 ? +(((cat.unitsSold - cat.prevSold) / cat.prevSold) * 100).toFixed(1) : null
+        return `<tr style="background:${idx % 2 === 0 ? '#fff' : '#f8fafc'}">
+          <td>${c}</td>
+          <td style="text-align:right;font-family:monospace;font-weight:700">${cat.unitsSold}</td>
+          <td style="text-align:right;font-family:monospace;color:#64748b">${cat.prevSold || 0}</td>
+          <td style="text-align:right;font-family:monospace;color:${chg >= 0 ? '#16a34a' : '#dc2626'};font-weight:600">${fmtChg(chg)}</td>
+          <td style="text-align:right;color:#64748b">${pct}%</td>
+          ${hasRev ? `<td style="text-align:right;font-family:monospace;color:#16a34a">${fmtRev(cat.revenue)}</td>` : ''}
+        </tr>`
+      }).join('')
+
+    const prevMonthName = compareStart.toLocaleDateString('en-AU', { month: 'long', year: 'numeric' })
+
+    const html = `<!DOCTYPE html><html><head><title>Sales Report — ${monthName}</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: Arial, sans-serif; font-size: 12px; color: #1f2937; background: #fff; }
+  .page { padding: 28px 32px; }
+  .header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 3px solid #0f172a; padding-bottom: 14px; margin-bottom: 20px; }
+  .header-left h1 { font-size: 20px; font-weight: 700; color: #0f172a; }
+  .header-left p { font-size: 11px; color: #64748b; margin-top: 3px; }
+  .header-right { text-align: right; font-size: 11px; color: #64748b; line-height: 1.6; }
+  .header-right strong { color: #0f172a; font-size: 13px; display: block; }
+  .summary { display: flex; gap: 0; border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden; margin-bottom: 22px; }
+  .summary-card { flex: 1; padding: 12px 16px; border-right: 1px solid #e2e8f0; }
+  .summary-card:last-child { border-right: none; }
+  .summary-card .num { font-size: 22px; font-weight: 700; font-family: monospace; color: #0f172a; }
+  .summary-card .lbl { font-size: 10px; color: #64748b; text-transform: uppercase; letter-spacing: 0.06em; margin-top: 2px; }
+  .summary-card .sub { font-size: 10px; color: #94a3b8; margin-top: 1px; }
+  .section-title { font-size: 12px; font-weight: 700; color: #0f172a; text-transform: uppercase; letter-spacing: 0.06em; margin: 22px 0 10px; padding-bottom: 6px; border-bottom: 2px solid #e2e8f0; }
+  table { width: 100%; border-collapse: collapse; margin-bottom: 4px; }
+  th { background: #0f172a; color: #fff; padding: 7px 10px; text-align: left; font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; }
+  td { padding: 6px 10px; border-bottom: 1px solid #f1f5f9; font-size: 11px; }
+  .totals-row td { background: #f1f5f9; font-weight: 700; border-top: 2px solid #e2e8f0; }
+  .footer { margin-top: 24px; padding-top: 12px; border-top: 1px solid #e2e8f0; font-size: 10px; color: #94a3b8; display: flex; justify-content: space-between; }
+  @media print {
+    body { font-size: 11px; }
+    .page { padding: 16px; }
+    .section-title { page-break-before: auto; }
+    tr { page-break-inside: avoid; }
+  }
+</style>
+</head><body><div class="page">
+  <div class="header">
+    <div class="header-left">
+      <h1>Monthly Sales Report</h1>
+      <p>Paynter Bar — GemLife Palmwoods</p>
+    </div>
+    <div class="header-right">
+      <strong>${monthName}</strong>
+      Generated: ${generated}<br>
+      Compared to: ${prevMonthName}
+    </div>
+  </div>
+
+  <div class="summary">
+    <div class="summary-card">
+      <div class="num">${report.totals.unitsSold}</div>
+      <div class="lbl">Total Units Sold</div>
+      <div class="sub">Prior: ${report.totals.prevSold || 0}</div>
+    </div>
+    ${hasRev ? `<div class="summary-card">
+      <div class="num">${fmtRev(report.totals.revenue)}</div>
+      <div class="lbl">Total Revenue</div>
+      <div class="sub">Prior: ${fmtRev(report.totals.prevRev)}</div>
+    </div>` : ''}
+    <div class="summary-card">
+      <div class="num">${report.items.filter(i => i.unitsSold > 0).length}</div>
+      <div class="lbl">Items Sold</div>
+    </div>
+    <div class="summary-card">
+      <div class="num" style="font-size:14px">${report.items[0]?.name.split(' ').slice(0,3).join(' ') || '—'}</div>
+      <div class="lbl">Top Seller</div>
+      <div class="sub">${report.items[0]?.unitsSold || 0} units</div>
+    </div>
+  </div>
+
+  <div class="section-title">Category Breakdown</div>
+  <table>
+    <thead><tr>
+      <th>Category</th>
+      <th style="text-align:right">Units Sold</th>
+      <th style="text-align:right">Prior Month</th>
+      <th style="text-align:right">Change</th>
+      <th style="text-align:right">% of Total</th>
+      ${hasRev ? '<th style="text-align:right">Revenue</th>' : ''}
+    </tr></thead>
+    <tbody>
+      ${catRows}
+      <tr class="totals-row">
+        <td>TOTAL</td>
+        <td style="text-align:right;font-family:monospace">${report.totals.unitsSold}</td>
+        <td style="text-align:right;font-family:monospace;color:#64748b">${report.totals.prevSold || 0}</td>
+        <td style="text-align:right">—</td>
+        <td style="text-align:right">100%</td>
+        ${hasRev ? `<td style="text-align:right;font-family:monospace;color:#16a34a">${fmtRev(report.totals.revenue)}</td>` : ''}
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="section-title">Top 10 Sellers</div>
+  <table>
+    <thead><tr>
+      <th style="width:28px;text-align:center">#</th>
+      <th>Item</th>
+      <th>Category</th>
+      <th style="text-align:right">Units Sold</th>
+      <th style="text-align:right">Prior Month</th>
+      <th style="text-align:right">Change</th>
+      ${hasRev ? '<th style="text-align:right">Revenue</th>' : ''}
+    </tr></thead>
+    <tbody>${top10Rows}</tbody>
+  </table>
+
+  <div class="footer">
+    <span>Paynter Bar Reorder System — Data from Square POS</span>
+    <span>Generated ${generated}</span>
+  </div>
+</div></body></html>`
+
+    const w = window.open('', '_blank')
+    w.document.write(html)
+    w.document.close()
+    w.focus()
+    setTimeout(() => w.print(), 600)
+  }
+
   function printOrderSheet(supplier) {
     const orderItems = items.filter(i => i.supplier === supplier && i.orderQty > 0)
     const date = new Date().toLocaleDateString('en-AU', { day: '2-digit', month: 'short', year: 'numeric' })
@@ -290,7 +587,9 @@ ${orderItems.length === 0 ? '<p style="color:#6b7280;margin-top:16px">No items t
             </div>
             <div style={styles.headerRight}>
               {lastUpdated && <span style={styles.lastUpdated}>Updated {new Date(lastUpdated).toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit' })}</span>}
-              <div style={{ display: 'flex', gap: 8 }}>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                <button style={{ ...styles.btn, background: '#0e7490' }} onClick={generateStockReport} title="Stock on Hand PDF">📋 Stock PDF</button>
+                <button style={{ ...styles.btn, background: '#065f46' }} onClick={generateSalesReport} title="Monthly Sales PDF">📈 Sales PDF</button>
                 <button style={{ ...styles.btn, background: mainTab === 'sales' ? '#7c3aed' : '#4b5563' }}
                   onClick={() => {
                     const next = mainTab === 'sales' ? 'reorder' : 'sales'
