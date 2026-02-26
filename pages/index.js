@@ -35,6 +35,7 @@ export default function Home() {
   const [newSupplierName, setNewSupplierName] = useState('')
   const [printing, setPrinting]         = useState(null)
   const [daysBack, setDaysBack]         = useState(90)
+  const [viewMode, setViewMode]         = useState('reorder')
 
   useEffect(() => {
     if (sessionStorage.getItem('bar_authed') === 'yes') setAuthed(true)
@@ -345,6 +346,9 @@ ${orderItems.length === 0 ? '<p style="color:#6b7280;margin-top:16px">No items t
               <button style={{ ...styles.tab, borderStyle: 'dashed', color: '#64748b' }}
                 onClick={() => setAddingSupplier(true)}>+ Supplier</button>
             )}
+            <div style={{ width: 1, background: '#e2e8f0', margin: '0 6px', alignSelf: 'stretch' }} />
+            <button style={{ ...styles.tab, ...(viewMode === 'pricing' ? { background: '#7c3aed', color: '#fff', borderColor: '#7c3aed' } : { color: '#7c3aed', borderColor: '#7c3aed' }) }}
+              onClick={() => setViewMode(v => v === 'pricing' ? 'reorder' : 'pricing')}>$ Pricing</button>
           </div>
           <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
             <label style={styles.filterCheck}>
@@ -393,7 +397,6 @@ ${orderItems.length === 0 ? '<p style="color:#6b7280;margin-top:16px">No items t
                 <th style={styles.th}>Category</th>
                 <th style={styles.th}>Supplier</th>
                 <th style={{ ...styles.th, textAlign: 'right' }}>On Hand</th>
-                <th style={{ ...styles.th, textAlign: 'right' }}>Override</th>
                 <th style={{ ...styles.th, textAlign: 'right' }}>Wkly Avg</th>
                 <th style={{ ...styles.th, textAlign: 'right' }}>Target</th>
                 <th style={{ ...styles.th, textAlign: 'center' }}>Pack</th>
@@ -401,18 +404,22 @@ ${orderItems.length === 0 ? '<p style="color:#6b7280;margin-top:16px">No items t
                 <th style={{ ...styles.th, textAlign: 'right' }}>Bottles</th>
                 <th style={{ ...styles.th, textAlign: 'center' }}>Priority</th>
                 <th style={{ ...styles.th, width: 180 }}>Notes</th>
+                {viewMode === 'pricing' && <>
+                  <th style={{ ...styles.th, textAlign: 'right', color: '#7c3aed' }}>Buy Price</th>
+                  <th style={{ ...styles.th, textAlign: 'right', color: '#7c3aed' }}>Sell Price</th>
+                  <th style={{ ...styles.th, textAlign: 'right', color: '#7c3aed' }}>Margin</th>
+                </>}
               </tr>
             </thead>
             <tbody>
               {displayed.length === 0 && (
-                <tr><td colSpan={12} style={{ textAlign: 'center', padding: '48px 24px', color: '#64748b' }}>
+                <tr><td colSpan={viewMode === 'pricing' ? 14 : 11} style={{ textAlign: 'center', padding: '48px 24px', color: '#64748b' }}>
                   {filterOrder ? 'No items to order this week.' : 'No items found.'}
                 </td></tr>
               )}
               {displayed.map((item, idx) => {
                 const p = PRIORITY_COLORS[item.priority]
                 const rowBg = item.orderQty > 0 ? p.bg : (idx % 2 === 0 ? '#fff' : '#f8fafc')
-                const hasOverride = item.stockOverride !== null && item.stockOverride !== undefined && item.stockOverride !== ''
                 return (
                   <tr key={item.name} style={{ background: rowBg }}>
                     <td style={{ ...styles.td, fontWeight: 500, fontSize: 13 }}>{item.name}</td>
@@ -426,23 +433,8 @@ ${orderItems.length === 0 ? '<p style="color:#6b7280;margin-top:16px">No items t
                         onChange={v => saveSetting(item.name, 'supplier', v)}
                         saving={saving[`${item.name}_supplier`]} colorMap={SUPPLIER_COLORS} />
                     </td>
-                    <td style={{ ...styles.td, textAlign: 'right', fontFamily: 'IBM Plex Mono, monospace',
-                      color: hasOverride ? '#94a3b8' : 'inherit', textDecoration: hasOverride ? 'line-through' : 'none' }}>
+                    <td style={{ ...styles.td, textAlign: 'right', fontFamily: 'IBM Plex Mono, monospace' }}>
                       {item.onHand}
-                    </td>
-                    <td style={{ ...styles.td, textAlign: 'right' }}>
-                      {hasOverride ? (
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 4 }}>
-                          <span style={{ fontFamily: 'IBM Plex Mono, monospace', color: '#d97706', fontWeight: 700 }}>{item.stockOverride}</span>
-                          <button onClick={() => clearOverride(item.name)}
-                            style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8', fontSize: 14, padding: '0 2px' }}
-                            title="Clear override">x</button>
-                        </div>
-                      ) : (
-                        <EditNumber value="" placeholder="Set"
-                          onChange={v => v !== '' && saveSetting(item.name, 'stockOverride', v)}
-                          saving={saving[`${item.name}_stockOverride`]} min={0} />
-                      )}
                     </td>
                     <td style={{ ...styles.td, textAlign: 'right', fontFamily: 'IBM Plex Mono, monospace' }}>{item.weeklyAvg}</td>
                     <td style={{ ...styles.td, textAlign: 'right', fontFamily: 'IBM Plex Mono, monospace' }}>{item.targetStock}</td>
@@ -463,6 +455,36 @@ ${orderItems.length === 0 ? '<p style="color:#6b7280;margin-top:16px">No items t
                       <EditText value={item.notes || ''} onChange={v => saveSetting(item.name, 'notes', v)}
                         saving={saving[`${item.name}_notes`]} placeholder="Add note..." />
                     </td>
+                    {viewMode === 'pricing' && (() => {
+                      const buy  = item.buyPrice  !== '' && item.buyPrice  != null ? Number(item.buyPrice)  : null
+                      const sell = item.sellPrice !== '' && item.sellPrice != null ? Number(item.sellPrice) : null
+                      const marginPct = (buy != null && sell != null && sell > 0) ? (((sell - buy) / sell) * 100) : null
+                      const marginStr = marginPct != null ? marginPct.toFixed(1) + '%' : '-'
+                      const marginColor = marginPct == null ? '#94a3b8' : marginPct >= 40 ? '#16a34a' : marginPct >= 20 ? '#d97706' : '#dc2626'
+                      const buyFromSq  = item.squareBuyPrice  != null && Number(item.buyPrice)  === item.squareBuyPrice
+                      const sellFromSq = item.squareSellPrice != null && Number(item.sellPrice) === item.squareSellPrice
+                      return <>
+                        <td style={{ ...styles.td, textAlign: 'right' }}>
+                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 1 }}>
+                            <EditNumber value={buy ?? ''} placeholder="$0.00" decimals={2} prefix="$"
+                              onChange={v => saveSetting(item.name, 'buyPrice', v)}
+                              saving={saving[`${item.name}_buyPrice`]} min={0} />
+                            {buyFromSq && <span style={{ fontSize: 9, color: '#94a3b8', fontFamily: 'IBM Plex Mono, monospace' }}>from Square</span>}
+                          </div>
+                        </td>
+                        <td style={{ ...styles.td, textAlign: 'right' }}>
+                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 1 }}>
+                            <EditNumber value={sell ?? ''} placeholder="$0.00" decimals={2} prefix="$"
+                              onChange={v => saveSetting(item.name, 'sellPrice', v)}
+                              saving={saving[`${item.name}_sellPrice`]} min={0} />
+                            {sellFromSq && <span style={{ fontSize: 9, color: '#94a3b8', fontFamily: 'IBM Plex Mono, monospace' }}>from Square</span>}
+                          </div>
+                        </td>
+                        <td style={{ ...styles.td, textAlign: 'right', fontWeight: 700, fontFamily: 'IBM Plex Mono, monospace', color: marginColor }}>
+                          {marginStr}
+                        </td>
+                      </>
+                    })()}
                   </tr>
                 )
               })}
@@ -492,13 +514,13 @@ function EditSelect({ value, options, onChange, saving, colorMap }) {
     onClick={() => setEditing(true)} title="Click to edit">{value}</span>
 }
 
-function EditNumber({ value, onChange, saving, min, placeholder }) {
+function EditNumber({ value, onChange, saving, min, placeholder, decimals, prefix }) {
   const [editing, setEditing] = useState(false)
   const [val, setVal] = useState(value)
   useEffect(() => setVal(value), [value])
   if (saving) return <span style={{ color: '#94a3b8', fontSize: 12 }}>...</span>
   if (editing) return (
-    <input type="number" value={val} min={min || 0} style={styles.inlineInput}
+    <input type="number" value={val} min={min || 0} step={decimals ? 0.01 : 1} style={styles.inlineInput}
       onChange={e => setVal(e.target.value)}
       onBlur={() => { if (val !== '') onChange(val); setEditing(false) }}
       onKeyDown={e => { if (e.key === 'Enter') { onChange(val); setEditing(false) } if (e.key === 'Escape') setEditing(false) }}
@@ -508,8 +530,9 @@ function EditNumber({ value, onChange, saving, min, placeholder }) {
     <span style={{ cursor: 'pointer', color: '#cbd5e1', fontSize: 11, fontStyle: 'italic' }}
       onClick={() => setEditing(true)}>{placeholder || 'Set'}</span>
   )
+  const display = decimals ? `${prefix || ''}${Number(value).toFixed(decimals)}` : value
   return <span style={{ cursor: 'pointer', fontFamily: 'IBM Plex Mono, monospace', fontSize: 13 }}
-    onClick={() => setEditing(true)} title="Click to edit">{value}</span>
+    onClick={() => setEditing(true)} title="Click to edit">{display}</span>
 }
 
 function EditText({ value, onChange, saving, placeholder }) {
