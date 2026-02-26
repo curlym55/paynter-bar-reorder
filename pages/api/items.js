@@ -26,6 +26,7 @@ export default async function handler(req, res) {
 
       return {
         ...calculated,
+        isSpirit:        ['Spirits','Fortified & Liqueurs'].includes(calculated.category),
         stockOverride:   settings.stockOverride ?? null,
         notes:           settings.notes || '',
         buyPrice:        settings.buyPrice || '',
