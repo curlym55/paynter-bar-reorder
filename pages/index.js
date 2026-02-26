@@ -52,6 +52,7 @@ export default function Home() {
   const [trendData, setTrendData]       = useState(null)
   const [trendLoading, setTrendLoading] = useState(false)
   const [trendError, setTrendError]     = useState(null)
+  const [agmLoading, setAgmLoading]     = useState(false)
 
   useEffect(() => {
     if (sessionStorage.getItem('bar_authed') === 'yes') setAuthed(true)
@@ -235,6 +236,8 @@ export default function Home() {
 
   // ── GENERATE AGM ANNUAL REPORT PDF ────────────────────────────────────────
   async function generateAGMReport() {
+    if (agmLoading) return
+    setAgmLoading(true)
     const now = new Date()
     // Financial year: May 1 to April 30
     // Determine current FY: if month >= May (4), FY started this year; else last year
@@ -260,6 +263,7 @@ export default function Home() {
       priorReport = await r2.json()
     } catch(e) {
       alert('Could not fetch annual data: ' + e.message)
+      setAgmLoading(false)
       return
     }
 
@@ -455,6 +459,7 @@ export default function Home() {
   </div>
 </div></body></html>`
 
+    setAgmLoading(false)
     const w = window.open('', '_blank')
     w.document.write(html)
     w.document.close()
@@ -930,7 +935,9 @@ ${orderItems.length === 0 ? '<p style="color:#6b7280;margin-top:16px">No items t
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
                 <button style={{ ...styles.btn, background: '#0e7490' }} onClick={generateStockReport} title="Stock on Hand PDF">📋 Stock PDF</button>
                 <button style={{ ...styles.btn, background: '#065f46' }} onClick={generateSalesReport} title="Monthly Sales PDF">📈 Sales PDF</button>
-                <button style={{ ...styles.btn, background: '#7e22ce' }} onClick={generateAGMReport} title="Annual AGM Report (May–April)">📑 AGM PDF</button>
+                <button style={{ ...styles.btn, background: '#7e22ce', ...(agmLoading ? styles.btnDisabled : {}) }} onClick={generateAGMReport} disabled={agmLoading} title="Annual AGM Report (May–April)">
+                  {agmLoading ? '⏳ Building...' : '📑 AGM PDF'}
+                </button>
                 <button style={{ ...styles.btn, background: mainTab === 'trends' ? '#b45309' : '#92400e' }}
                   onClick={() => { const next = mainTab === 'trends' ? 'reorder' : 'trends'; setMainTab(next); if (next === 'trends' && !trendData) loadTrendData(); }}>
                   {mainTab === 'trends' ? '← Back' : '📈 Trends'}
