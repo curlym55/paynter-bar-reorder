@@ -49,6 +49,9 @@ export default function Home() {
   const [salesError, setSalesError]     = useState(null)
   const [salesCategory, setSalesCategory] = useState('All')
   const [salesSort, setSalesSort]       = useState('units')
+  const [trendData, setTrendData]       = useState(null)
+  const [trendLoading, setTrendLoading] = useState(false)
+  const [trendError, setTrendError]     = useState(null)
 
   useEffect(() => {
     if (sessionStorage.getItem('bar_authed') === 'yes') setAuthed(true)
@@ -181,6 +184,278 @@ export default function Home() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ itemName: '_global', field: 'suppliers', value: updated })
     })
+  }
+
+
+  // ── LOAD QUARTERLY TREND DATA ─────────────────────────────────────────────
+  async function loadTrendData() {
+    setTrendLoading(true)
+    setTrendError(null)
+    try {
+      const now = new Date()
+      // Build 4 quarters ending at the most recent completed quarter
+      // Quarter end months: Jan, Apr, Jul, Oct
+      const quarters = []
+      let qEnd = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59)
+      // Step back to last quarter boundary
+      const qEndMonths = [0, 3, 6, 9] // Jan, Apr, Jul, Oct (0-indexed)
+      while (!qEndMonths.includes(qEnd.getMonth())) {
+        qEnd = new Date(qEnd.getFullYear(), qEnd.getMonth(), 0, 23, 59, 59)
+      }
+      for (let i = 0; i < 4; i++) {
+        const end   = new Date(qEnd)
+        const start = new Date(qEnd.getFullYear(), qEnd.getMonth() - 2, 1, 0, 0, 0)
+        quarters.unshift({ start, end })
+        qEnd = new Date(start.getTime() - 1)
+        // Step back to last quarter boundary
+        while (!qEndMonths.includes(qEnd.getMonth())) {
+          qEnd = new Date(qEnd.getFullYear(), qEnd.getMonth(), 0, 23, 59, 59)
+        }
+      }
+
+      // Fetch all 4 quarters in parallel
+      const results = await Promise.all(quarters.map(async q => {
+        const params = new URLSearchParams({ start: q.start.toISOString(), end: q.end.toISOString() })
+        const r = await fetch(`/api/sales?${params}`)
+        if (!r.ok) throw new Error('Failed to fetch quarter data')
+        const data = await r.json()
+        return { ...q, categories: data.categories, totals: data.totals }
+      }))
+      setTrendData(results)
+    } catch(e) {
+      setTrendError(e.message)
+    } finally {
+      setTrendLoading(false)
+    }
+  }
+
+  // ── GENERATE AGM ANNUAL REPORT PDF ────────────────────────────────────────
+  async function generateAGMReport() {
+    const now = new Date()
+    // Financial year: May 1 to April 30
+    // Determine current FY: if month >= May (4), FY started this year; else last year
+    const fyStartYear = now.getMonth() >= 4 ? now.getFullYear() : now.getFullYear() - 1
+    const fyStart = new Date(fyStartYear, 4, 1, 0, 0, 0)       // May 1
+    const fyEnd   = new Date(fyStartYear + 1, 3, 30, 23, 59, 59) // Apr 30
+    // Prior year
+    const pyStart = new Date(fyStartYear - 1, 4, 1, 0, 0, 0)
+    const pyEnd   = new Date(fyStartYear, 3, 30, 23, 59, 59)
+
+    const fyLabel = `${fyStartYear}–${fyStartYear + 1}`
+    const generated = now.toLocaleString('en-AU', { day: '2-digit', month: 'long', year: 'numeric' })
+
+    // Fetch full year data + prior year
+    let report, priorReport
+    try {
+      const [r1, r2] = await Promise.all([
+        fetch(`/api/sales?start=${fyStart.toISOString()}&end=${fyEnd.toISOString()}`),
+        fetch(`/api/sales?start=${pyStart.toISOString()}&end=${pyEnd.toISOString()}`),
+      ])
+      if (!r1.ok || !r2.ok) throw new Error('Failed to fetch annual data')
+      report      = await r1.json()
+      priorReport = await r2.json()
+    } catch(e) {
+      alert('Could not fetch annual data: ' + e.message)
+      return
+    }
+
+    // Fetch 4 quarters of current FY
+    const quarters = [
+      { label: 'Q1 May–Jul', start: new Date(fyStartYear, 4, 1), end: new Date(fyStartYear, 6, 31, 23, 59, 59) },
+      { label: 'Q2 Aug–Oct', start: new Date(fyStartYear, 7, 1), end: new Date(fyStartYear, 9, 31, 23, 59, 59) },
+      { label: 'Q3 Nov–Jan', start: new Date(fyStartYear, 10, 1), end: new Date(fyStartYear + 1, 0, 31, 23, 59, 59) },
+      { label: 'Q4 Feb–Apr', start: new Date(fyStartYear + 1, 1, 1), end: new Date(fyStartYear + 1, 3, 30, 23, 59, 59) },
+    ]
+    const qResults = await Promise.all(quarters.map(async q => {
+      try {
+        const r = await fetch(`/api/sales?start=${q.start.toISOString()}&end=${q.end.toISOString()}`)
+        const d = r.ok ? await r.json() : { categories: {}, totals: { unitsSold: 0, revenue: 0 } }
+        return { ...q, categories: d.categories, totals: d.totals }
+      } catch { return { ...q, categories: {}, totals: { unitsSold: 0, revenue: 0 } } }
+    }))
+
+    const CATEGORY_ORDER = ['Beer','Cider','PreMix','White Wine','Red Wine','Rose','Sparkling','Fortified & Liqueurs','Spirits','Soft Drinks','Snacks']
+    const hasRev = report.totals.revenue > 0
+    const fmtRev = n => n ? `$${Number(n).toLocaleString('en-AU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '—'
+    const fmtChg = (cur, pri) => {
+      if (!pri) return '—'
+      const pct = +(((cur - pri) / pri) * 100).toFixed(1)
+      return `${pct >= 0 ? '+' : ''}${pct}%`
+    }
+    const chgColor = (cur, pri) => !pri ? '#64748b' : cur >= pri ? '#16a34a' : '#dc2626'
+
+    // Category rows
+    const catRows = CATEGORY_ORDER
+      .filter(c => report.categories[c] || priorReport.categories[c])
+      .map((c, idx) => {
+        const cur = report.categories[c] || { unitsSold: 0, revenue: 0 }
+        const pri = priorReport.categories[c] || { unitsSold: 0, revenue: 0 }
+        const pct = report.totals.unitsSold > 0 ? ((cur.unitsSold / report.totals.unitsSold) * 100).toFixed(1) : 0
+        const cc  = chgColor(cur.unitsSold, pri.unitsSold)
+        const bg  = idx % 2 === 0 ? '#fff' : '#f8fafc'
+        return `<tr style="background:${bg}">
+          <td>${c}</td>
+          <td style="text-align:right;font-family:monospace;font-weight:700">${cur.unitsSold.toLocaleString()}</td>
+          <td style="text-align:right;color:#64748b;font-family:monospace">${pri.unitsSold.toLocaleString()}</td>
+          <td style="text-align:right;color:${cc};font-weight:600">${fmtChg(cur.unitsSold, pri.unitsSold)}</td>
+          <td style="text-align:right;color:#94a3b8">${pct}%</td>
+          ${hasRev ? `<td style="text-align:right;font-family:monospace;color:#16a34a">${fmtRev(cur.revenue)}</td>
+          <td style="text-align:right;font-family:monospace;color:#94a3b8">${fmtRev(pri.revenue)}</td>` : ''}
+        </tr>`
+      }).join('')
+
+    // Top 10
+    const top10 = report.items.filter(i => i.unitsSold > 0).slice(0, 10)
+    const top10Rows = top10.map((item, idx) => `
+      <tr style="background:${idx % 2 === 0 ? '#fff' : '#f8fafc'}">
+        <td style="text-align:center;color:#94a3b8;font-size:11px;font-weight:700">${idx + 1}</td>
+        <td style="font-weight:${idx < 3 ? '700' : '400'}">${item.name}</td>
+        <td style="color:#64748b;font-size:11px">${item.category}</td>
+        <td style="text-align:right;font-family:monospace;font-weight:700">${item.unitsSold.toLocaleString()}</td>
+        ${hasRev ? `<td style="text-align:right;font-family:monospace;color:#16a34a">${fmtRev(item.revenue)}</td>` : ''}
+      </tr>`).join('')
+
+    // Quarterly bar chart (inline SVG)
+    const maxUnits = Math.max(...qResults.map(q => q.totals.unitsSold), 1)
+    const barW = 120, barGap = 40, chartH = 160, leftPad = 50
+    const totalW = leftPad + qResults.length * (barW + barGap) + barGap
+    const BAR_COLORS = ['#2563eb','#0891b2','#7c3aed','#0f766e']
+    const bars = qResults.map((q, i) => {
+      const bh = Math.round((q.totals.unitsSold / maxUnits) * chartH)
+      const x  = leftPad + barGap + i * (barW + barGap)
+      const y  = chartH - bh + 20
+      return `<rect x="${x}" y="${y}" width="${barW}" height="${bh}" fill="${BAR_COLORS[i]}" rx="4"/>
+        <text x="${x + barW/2}" y="${y - 6}" text-anchor="middle" font-size="11" font-family="Arial" fill="#0f172a" font-weight="700">${q.totals.unitsSold.toLocaleString()}</text>
+        <text x="${x + barW/2}" y="${chartH + 36}" text-anchor="middle" font-size="10" font-family="Arial" fill="#475569">${q.label}</text>
+        ${hasRev ? `<text x="${x + barW/2}" y="${chartH + 50}" text-anchor="middle" font-size="9" font-family="Arial" fill="#16a34a">${fmtRev(q.totals.revenue)}</text>` : ''}`
+    }).join('')
+    // Y-axis gridlines
+    const gridLines = [0.25, 0.5, 0.75, 1].map(pct => {
+      const y = chartH - Math.round(pct * chartH) + 20
+      const val = Math.round(pct * maxUnits)
+      return `<line x1="${leftPad}" y1="${y}" x2="${totalW - barGap}" y2="${y}" stroke="#e2e8f0" stroke-width="1"/>
+        <text x="${leftPad - 6}" y="${y + 4}" text-anchor="end" font-size="9" font-family="Arial" fill="#94a3b8">${val}</text>`
+    }).join('')
+    const chartSVG = `<svg width="${totalW}" height="${chartH + 70}" xmlns="http://www.w3.org/2000/svg">
+      ${gridLines}
+      <line x1="${leftPad}" y1="20" x2="${leftPad}" y2="${chartH + 20}" stroke="#cbd5e1" stroke-width="1"/>
+      ${bars}
+    </svg>`
+
+    const html = `<!DOCTYPE html><html><head><title>Annual Report ${fyLabel} — Paynter Bar</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:Arial,sans-serif;font-size:12px;color:#1f2937;background:#fff}
+  .page{padding:28px 36px}
+  .header{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:4px solid #0f172a;padding-bottom:16px;margin-bottom:24px}
+  .header-left h1{font-size:22px;font-weight:700;color:#0f172a}
+  .header-left .sub{font-size:12px;color:#64748b;margin-top:4px}
+  .header-left .fy{font-size:16px;font-weight:700;color:#2563eb;margin-top:6px}
+  .header-right{text-align:right;font-size:11px;color:#64748b;line-height:1.8}
+  .summary{display:flex;gap:0;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;margin-bottom:28px}
+  .card{flex:1;padding:14px 18px;border-right:1px solid #e2e8f0}
+  .card:last-child{border-right:none}
+  .card .num{font-size:24px;font-weight:700;font-family:monospace;color:#0f172a}
+  .card .lbl{font-size:10px;color:#64748b;text-transform:uppercase;letter-spacing:.06em;margin-top:2px}
+  .card .sub{font-size:10px;color:#94a3b8;margin-top:2px}
+  .card .chg{font-size:11px;font-weight:600;margin-top:3px}
+  .section-title{font-size:11px;font-weight:700;color:#0f172a;text-transform:uppercase;letter-spacing:.07em;margin:24px 0 10px;padding-bottom:6px;border-bottom:2px solid #e2e8f0}
+  table{width:100%;border-collapse:collapse;margin-bottom:4px}
+  th{background:#0f172a;color:#fff;padding:7px 10px;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.06em}
+  td{padding:6px 10px;border-bottom:1px solid #f1f5f9;font-size:11px}
+  .totals-row td{background:#f1f5f9;font-weight:700;border-top:2px solid #cbd5e1}
+  .chart-wrap{background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:16px;margin-bottom:4px;overflow-x:auto}
+  .footer{margin-top:28px;padding-top:12px;border-top:1px solid #e2e8f0;font-size:10px;color:#94a3b8;display:flex;justify-content:space-between}
+  @media print{body{font-size:11px}.page{padding:16px}tr{page-break-inside:avoid}.section-title{page-break-before:auto}}
+</style></head><body><div class="page">
+
+  <div class="header">
+    <div class="header-left">
+      <h1>Annual Sales Report</h1>
+      <div class="sub">Paynter Bar — GemLife Palmwoods</div>
+      <div class="fy">Financial Year ${fyLabel} &nbsp;|&nbsp; 1 May ${fyStartYear} – 30 April ${fyStartYear + 1}</div>
+    </div>
+    <div class="header-right">
+      <strong style="font-size:13px;color:#0f172a;display:block">AGM Report</strong>
+      Generated: ${generated}<br>
+      Prior year: 1 May ${fyStartYear - 1} – 30 April ${fyStartYear}
+    </div>
+  </div>
+
+  <div class="summary">
+    <div class="card">
+      <div class="num">${report.totals.unitsSold.toLocaleString()}</div>
+      <div class="lbl">Total Units Sold</div>
+      <div class="sub">Prior year: ${priorReport.totals.unitsSold.toLocaleString()}</div>
+      <div class="chg" style="color:${chgColor(report.totals.unitsSold, priorReport.totals.unitsSold)}">${fmtChg(report.totals.unitsSold, priorReport.totals.unitsSold)} vs prior year</div>
+    </div>
+    ${hasRev ? `<div class="card">
+      <div class="num" style="font-size:18px">${fmtRev(report.totals.revenue)}</div>
+      <div class="lbl">Total Revenue</div>
+      <div class="sub">Prior year: ${fmtRev(priorReport.totals.revenue)}</div>
+      <div class="chg" style="color:${chgColor(report.totals.revenue, priorReport.totals.revenue)}">${fmtChg(report.totals.revenue, priorReport.totals.revenue)} vs prior year</div>
+    </div>` : ''}
+    <div class="card">
+      <div class="num">${report.items.filter(i => i.unitsSold > 0).length}</div>
+      <div class="lbl">Items Sold</div>
+      <div class="sub">across ${Object.keys(report.categories).length} categories</div>
+    </div>
+    <div class="card">
+      <div class="num" style="font-size:15px">${report.items[0]?.name.split(' ').slice(0,3).join(' ') || '—'}</div>
+      <div class="lbl">Top Seller</div>
+      <div class="sub">${report.items[0]?.unitsSold.toLocaleString() || 0} units for the year</div>
+    </div>
+  </div>
+
+  <div class="section-title">Quarterly Performance — Units Sold</div>
+  <div class="chart-wrap">${chartSVG}</div>
+
+  <div class="section-title">Annual Category Breakdown</div>
+  <table>
+    <thead><tr>
+      <th>Category</th>
+      <th style="text-align:right">Units ${fyLabel}</th>
+      <th style="text-align:right">Units Prior Year</th>
+      <th style="text-align:right">Change</th>
+      <th style="text-align:right">% of Total</th>
+      ${hasRev ? '<th style="text-align:right">Revenue</th><th style="text-align:right">Prior Revenue</th>' : ''}
+    </tr></thead>
+    <tbody>
+      ${catRows}
+      <tr class="totals-row">
+        <td>TOTAL</td>
+        <td style="text-align:right;font-family:monospace">${report.totals.unitsSold.toLocaleString()}</td>
+        <td style="text-align:right;font-family:monospace;color:#64748b">${priorReport.totals.unitsSold.toLocaleString()}</td>
+        <td style="text-align:right">${fmtChg(report.totals.unitsSold, priorReport.totals.unitsSold)}</td>
+        <td style="text-align:right">100%</td>
+        ${hasRev ? `<td style="text-align:right;font-family:monospace;color:#16a34a">${fmtRev(report.totals.revenue)}</td><td style="text-align:right;font-family:monospace;color:#94a3b8">${fmtRev(priorReport.totals.revenue)}</td>` : ''}
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="section-title">Top 10 Sellers for the Year</div>
+  <table>
+    <thead><tr>
+      <th style="width:28px;text-align:center">#</th>
+      <th>Item</th>
+      <th>Category</th>
+      <th style="text-align:right">Units Sold</th>
+      ${hasRev ? '<th style="text-align:right">Revenue</th>' : ''}
+    </tr></thead>
+    <tbody>${top10Rows}</tbody>
+  </table>
+
+  <div class="footer">
+    <span>Paynter Bar Hub — GemLife Palmwoods | Data from Square POS</span>
+    <span>Generated ${generated} | Financial Year ${fyLabel}</span>
+  </div>
+</div></body></html>`
+
+    const w = window.open('', '_blank')
+    w.document.write(html)
+    w.document.close()
+    w.focus()
+    setTimeout(() => w.print(), 800)
   }
 
   function generateStockReport() {
@@ -644,13 +919,18 @@ ${orderItems.length === 0 ? '<p style="color:#6b7280;margin-top:16px">No items t
                 <span style={styles.logo}>PAYNTER BAR HUB</span>
                 <span style={styles.logoSub}>GemLife Palmwoods</span>
               </div>
-              <h1 style={styles.title}>{mainTab === 'sales' ? 'Sales Report' : mainTab === 'help' ? 'Help & Guide' : 'Reorder Planner'}</h1>
+              <h1 style={styles.title}>{mainTab === 'sales' ? 'Sales Report' : mainTab === 'trends' ? 'Quarterly Trends' : mainTab === 'help' ? 'Help & Guide' : 'Reorder Planner'}</h1>
             </div>
             <div style={styles.headerRight}>
               {lastUpdated && <span style={styles.lastUpdated}>Updated {new Date(lastUpdated).toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit' })}</span>}
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
                 <button style={{ ...styles.btn, background: '#0e7490' }} onClick={generateStockReport} title="Stock on Hand PDF">📋 Stock PDF</button>
                 <button style={{ ...styles.btn, background: '#065f46' }} onClick={generateSalesReport} title="Monthly Sales PDF">📈 Sales PDF</button>
+                <button style={{ ...styles.btn, background: '#7e22ce' }} onClick={generateAGMReport} title="Annual AGM Report (May–April)">📑 AGM PDF</button>
+                <button style={{ ...styles.btn, background: mainTab === 'trends' ? '#b45309' : '#92400e' }}
+                  onClick={() => { setMainTab(t => { const next = t === 'trends' ? 'reorder' : 'trends'; if (next === 'trends' && !trendData) loadTrendData(); return next; }) }}>
+                  {mainTab === 'trends' ? '← Back' : '📈 Trends'}
+                </button>
                 <button style={{ ...styles.btn, background: mainTab === 'sales' ? '#7c3aed' : '#4b5563' }}
                   onClick={() => {
                     const next = mainTab === 'sales' ? 'reorder' : 'sales'
@@ -892,6 +1172,7 @@ ${orderItems.length === 0 ? '<p style="color:#6b7280;margin-top:16px">No items t
           </>
         )}
 
+        {mainTab === 'trends' && <TrendsView data={trendData} loading={trendLoading} error={trendError} />}
         {mainTab === 'help' && <HelpTab />}
 
         <footer style={styles.footer}>
@@ -901,6 +1182,152 @@ ${orderItems.length === 0 ? '<p style="color:#6b7280;margin-top:16px">No items t
     </>
   )
 }
+
+// ─── TRENDS VIEW ──────────────────────────────────────────────────────────────
+function TrendsView({ data, loading, error }) {
+  const CATEGORY_ORDER = ['Beer','Cider','PreMix','White Wine','Red Wine','Rose','Sparkling','Fortified & Liqueurs','Spirits','Soft Drinks','Snacks']
+  const CAT_COLORS = {
+    'Beer':                 '#2563eb',
+    'Cider':                '#0891b2',
+    'PreMix':               '#7c3aed',
+    'White Wine':           '#ca8a04',
+    'Red Wine':             '#dc2626',
+    'Rose':                 '#db2777',
+    'Sparkling':            '#0f766e',
+    'Fortified & Liqueurs': '#9a3412',
+    'Spirits':              '#4338ca',
+    'Soft Drinks':          '#16a34a',
+    'Snacks':               '#64748b',
+  }
+
+  if (loading) return (
+    <div style={{ padding: 60, textAlign: 'center', color: '#64748b' }}>
+      <div style={{ fontSize: 32, marginBottom: 12 }}>📊</div>
+      <div style={{ fontSize: 14 }}>Loading quarterly data from Square...</div>
+      <div style={{ fontSize: 11, marginTop: 8, color: '#94a3b8' }}>This may take a few seconds</div>
+    </div>
+  )
+  if (error) return (
+    <div style={{ padding: 40, textAlign: 'center', color: '#dc2626' }}>
+      <div style={{ fontSize: 14 }}>Could not load trend data: {error}</div>
+    </div>
+  )
+  if (!data) return null
+
+  // Build per-category data across quarters
+  const allCats = CATEGORY_ORDER.filter(c => data.some(q => q.categories[c]))
+  const hasRev  = data.some(q => q.totals.revenue > 0)
+
+  // Chart dimensions
+  const chartW = 680, chartH = 200, padL = 50, padB = 40, padT = 20, padR = 20
+  const innerW = chartW - padL - padR
+  const innerH = chartH - padT - padB
+
+  function CategoryChart({ cat }) {
+    const vals   = data.map(q => q.categories[cat]?.unitsSold || 0)
+    const revs   = data.map(q => q.categories[cat]?.revenue  || 0)
+    const maxVal = Math.max(...vals, 1)
+    const color  = CAT_COLORS[cat] || '#2563eb'
+    const barW   = Math.floor(innerW / data.length) - 16
+    const trend  = vals[vals.length-1] - vals[0]
+
+    const bars = data.map((q, i) => {
+      const bh = Math.round((vals[i] / maxVal) * innerH)
+      const x  = padL + i * (innerW / data.length) + 8
+      const y  = padT + innerH - bh
+      const lbl = q.label.split(' ')[0] + '\n' + q.label.split(' ').slice(1).join(' ')
+      return (
+        <g key={i}>
+          <rect x={x} y={y} width={barW} height={bh} fill={color} rx={3} opacity={0.85}/>
+          <text x={x + barW/2} y={y - 5} textAnchor="middle" fontSize={10} fill="#0f172a" fontWeight="600">{vals[i]}</text>
+          <text x={x + barW/2} y={padT + innerH + 14} textAnchor="middle" fontSize={9} fill="#475569">{q.label.split(' ').slice(0,2).join(' ')}</text>
+          {hasRev && <text x={x + barW/2} y={padT + innerH + 26} textAnchor="middle" fontSize={8} fill="#16a34a">${revs[i] ? revs[i].toFixed(0) : '—'}</text>}
+        </g>
+      )
+    })
+
+    // Y gridlines
+    const grids = [0.5, 1].map(pct => {
+      const y   = padT + innerH - Math.round(pct * innerH)
+      const val = Math.round(pct * maxVal)
+      return (
+        <g key={pct}>
+          <line x1={padL} y1={y} x2={chartW - padR} y2={y} stroke="#e2e8f0" strokeWidth={1}/>
+          <text x={padL - 4} y={y + 4} textAnchor="end" fontSize={9} fill="#94a3b8">{val}</text>
+        </g>
+      )
+    })
+
+    const trendColor = trend > 0 ? '#16a34a' : trend < 0 ? '#dc2626' : '#64748b'
+    const trendIcon  = trend > 0 ? '▲' : trend < 0 ? '▼' : '→'
+    const total      = vals.reduce((s, v) => s + v, 0)
+
+    return (
+      <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 10, padding: '16px 20px', marginBottom: 16 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div style={{ width: 12, height: 12, borderRadius: 3, background: color }}/>
+            <span style={{ fontWeight: 700, fontSize: 14, color: '#0f172a' }}>{cat}</span>
+          </div>
+          <div style={{ display: 'flex', gap: 20, fontSize: 11 }}>
+            <span style={{ color: '#64748b' }}>4-quarter total: <strong style={{ color: '#0f172a' }}>{total.toLocaleString()} units</strong></span>
+            <span style={{ color: trendColor, fontWeight: 700 }}>{trendIcon} {Math.abs(trend)} units {trend >= 0 ? 'up' : 'down'} vs 4 qtrs ago</span>
+          </div>
+        </div>
+        <svg width="100%" viewBox={`0 0 ${chartW} ${chartH + (hasRev ? 10 : 0)}`} style={{ overflow: 'visible' }}>
+          <line x1={padL} y1={padT} x2={padL} y2={padT + innerH} stroke="#cbd5e1" strokeWidth={1}/>
+          <line x1={padL} y1={padT + innerH} x2={chartW - padR} y2={padT + innerH} stroke="#cbd5e1" strokeWidth={1}/>
+          {grids}
+          {bars}
+        </svg>
+      </div>
+    )
+  }
+
+  // Summary row — all categories totals
+  const qLabels = data.map(q => q.label)
+  const grandTotals = data.map(q => q.totals.unitsSold)
+  const maxGrand = Math.max(...grandTotals, 1)
+
+  return (
+    <div style={{ padding: '28px 32px', maxWidth: 900, margin: '0 auto' }}>
+      <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 10, padding: '18px 24px', marginBottom: 24 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+          <div>
+            <div style={{ fontSize: 15, fontWeight: 700, color: '#0f172a' }}>Quarterly Sales Trends</div>
+            <div style={{ fontSize: 11, color: '#64748b', marginTop: 3 }}>Last 4 quarters — units sold by category</div>
+          </div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+            {qLabels.map((q, i) => (
+              <div key={i} style={{ fontSize: 10, background: '#f1f5f9', borderRadius: 4, padding: '3px 8px', color: '#475569' }}>
+                {q}: <strong>{grandTotals[i].toLocaleString()}</strong>
+              </div>
+            ))}
+          </div>
+        </div>
+        {/* Mini overall trend bars */}
+        <svg width="100%" viewBox="0 0 680 60" style={{ overflow: 'visible' }}>
+          {data.map((q, i) => {
+            const bh  = Math.round((grandTotals[i] / maxGrand) * 40)
+            const x   = 10 + i * 165
+            const y   = 50 - bh
+            return (
+              <g key={i}>
+                <rect x={x} y={y} width={150} height={bh} fill="#0f172a" rx={3} opacity={0.15}/>
+                <rect x={x} y={y} width={150} height={bh} fill="#2563eb" rx={3} opacity={0.6}/>
+                <text x={x + 75} y={y - 4} textAnchor="middle" fontSize={10} fill="#0f172a" fontWeight="700">{grandTotals[i].toLocaleString()}</text>
+                <text x={x + 75} y={58} textAnchor="middle" fontSize={9} fill="#64748b">{q.label}</text>
+              </g>
+            )
+          })}
+        </svg>
+      </div>
+
+      {allCats.map(cat => <CategoryChart key={cat} cat={cat} />)}
+    </div>
+  )
+}
+
 
 // ─── HELP TAB ─────────────────────────────────────────────────────────────────
 function HelpTab() {
