@@ -400,8 +400,11 @@ ${orderItems.length === 0 ? '<p style="color:#6b7280;margin-top:16px">No items t
                 <th style={{ ...styles.th, textAlign: 'right' }}>Wkly Avg</th>
                 <th style={{ ...styles.th, textAlign: 'right' }}>Target</th>
                 <th style={{ ...styles.th, textAlign: 'center' }}>Pack</th>
+                <th style={{ ...styles.th, textAlign: 'center' }}>Bottle Size</th>
                 <th style={{ ...styles.th, textAlign: 'right' }}>Order Qty</th>
                 <th style={{ ...styles.th, textAlign: 'right' }}>Bottles</th>
+                <th style={{ ...styles.th, textAlign: 'right', color: '#64748b' }}>Nips</th>
+                <th style={{ ...styles.th, textAlign: 'right' }}>Nips</th>
                 <th style={{ ...styles.th, textAlign: 'center' }}>Priority</th>
                 <th style={{ ...styles.th, width: 180 }}>Notes</th>
                 {viewMode === 'pricing' && <>
@@ -413,7 +416,7 @@ ${orderItems.length === 0 ? '<p style="color:#6b7280;margin-top:16px">No items t
             </thead>
             <tbody>
               {displayed.length === 0 && (
-                <tr><td colSpan={viewMode === 'pricing' ? 14 : 11} style={{ textAlign: 'center', padding: '48px 24px', color: '#64748b' }}>
+                <tr><td colSpan={viewMode === 'pricing' ? 16 : 13} style={{ textAlign: 'center', padding: '48px 24px', color: '#64748b' }}>
                   {filterOrder ? 'No items to order this week.' : 'No items found.'}
                 </td></tr>
               )}
@@ -442,11 +445,21 @@ ${orderItems.length === 0 ? '<p style="color:#6b7280;margin-top:16px">No items t
                       <EditNumber value={item.pack} onChange={v => saveSetting(item.name, 'pack', v)}
                         saving={saving[`${item.name}_pack`]} min={1} />
                     </td>
+                    <td style={{ ...styles.td, textAlign: 'center' }}>
+                      {item.isSpirit ? (
+                        <EditSelect value={String(item.bottleML)} options={['700', '750', '1000']}
+                          onChange={v => saveSetting(item.name, 'bottleML', Number(v))}
+                          saving={saving[`${item.name}_bottleML`]} />
+                      ) : <span style={{ color: '#e2e8f0' }}>—</span>}
+                    </td>
                     <td style={{ ...styles.td, textAlign: 'right', fontWeight: 700, fontFamily: 'IBM Plex Mono, monospace', fontSize: 15 }}>
-                      {item.orderQty > 0 ? item.orderQty : '-'}
+                      {item.isSpirit ? (item.bottlesToOrder > 0 ? item.bottlesToOrder : '-') : (item.orderQty > 0 ? item.orderQty : '-')}
                     </td>
                     <td style={{ ...styles.td, textAlign: 'right', fontFamily: 'IBM Plex Mono, monospace', color: '#1f4e79' }}>
-                      {item.bottlesToOrder ? item.bottlesToOrder : '-'}
+                      {item.isSpirit ? (item.bottlesToOrder > 0 ? item.bottlesToOrder : '-') : '-'}
+                    </td>
+                    <td style={{ ...styles.td, textAlign: 'right', fontFamily: 'IBM Plex Mono, monospace', color: '#64748b', fontSize: 12 }}>
+                      {item.isSpirit ? (item.orderQty > 0 ? item.orderQty : '-') : '-'}
                     </td>
                     <td style={{ ...styles.td, textAlign: 'center' }}>
                       <span style={{ display: 'inline-block', padding: '2px 10px', borderRadius: 99, fontSize: 11, fontWeight: 700, letterSpacing: '0.05em', background: p.badge, color: '#fff' }}>{item.priority}</span>
