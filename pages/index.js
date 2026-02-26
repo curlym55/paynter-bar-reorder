@@ -461,7 +461,6 @@ ${orderItems.length === 0 ? '<p style="color:#6b7280;margin-top:16px">No items t
                       const marginPct = (buy != null && sell != null && sell > 0) ? (((sell - buy) / sell) * 100) : null
                       const marginStr = marginPct != null ? marginPct.toFixed(1) + '%' : '-'
                       const marginColor = marginPct == null ? '#94a3b8' : marginPct >= 40 ? '#16a34a' : marginPct >= 20 ? '#d97706' : '#dc2626'
-                      const buyFromSq  = item.squareBuyPrice  != null && Number(item.buyPrice)  === item.squareBuyPrice
                       const sellFromSq = item.squareSellPrice != null && Number(item.sellPrice) === item.squareSellPrice
                       return <>
                         <td style={{ ...styles.td, textAlign: 'right' }}>
@@ -469,7 +468,7 @@ ${orderItems.length === 0 ? '<p style="color:#6b7280;margin-top:16px">No items t
                             <EditNumber value={buy ?? ''} placeholder="$0.00" decimals={2} prefix="$"
                               onChange={v => saveSetting(item.name, 'buyPrice', v)}
                               saving={saving[`${item.name}_buyPrice`]} min={0} />
-                            {buyFromSq && <span style={{ fontSize: 9, color: '#94a3b8', fontFamily: 'IBM Plex Mono, monospace' }}>from Square</span>}
+
                           </div>
                         </td>
                         <td style={{ ...styles.td, textAlign: 'right' }}>
