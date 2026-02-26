@@ -555,13 +555,31 @@ ${orderItems.length === 0 ? '<p style="color:#6b7280;margin-top:16px">No items t
 
       const range = window.XLSX.utils.decode_range(ws['!ref'])
 
-      // Style helpers — shade spirits rows lightly
+      // Style header row — dark navy background, white bold text, taller row
+      const headerStyle = {
+        font:      { bold: true, color: { rgb: 'FFFFFF' }, sz: 12 },
+        fill:      { fgColor: { rgb: '0F172A' }, patternType: 'solid' },
+        alignment: { horizontal: 'center', vertical: 'center', wrapText: true },
+        border: {
+          bottom: { style: 'medium', color: { rgb: '2563EB' } }
+        }
+      }
+      const cols = ['A','B','C','D','E','F','G','H','I','J','K']
+      cols.forEach(col => {
+        if (ws[`${col}1`]) ws[`${col}1`].s = headerStyle
+      })
+      ws['!rows'] = [{ hpt: 28 }] // taller header row
+
+      // Format data rows
       displayed.forEach((item, idx) => {
-        const row = idx + 2 // 1-indexed, row 1 is header
-        // G = Total Count = D+E+F (bottles or units)
+        const row = idx + 2
         ws[`G${row}`] = { f: `D${row}+E${row}+F${row}`, t: 'n', z: '0.0' }
 
         if (item.isSpirit) {
+          // Format pre-filled Nips/Bottle to 1dp
+          if (ws[`H${row}`] && ws[`H${row}`].v !== '') {
+            ws[`H${row}`] = { v: ws[`H${row}`].v, t: 'n', z: '0.0' }
+          }
           ws[`I${row}`] = { f: `G${row}*H${row}`, t: 'n', z: '0.0' }
           ws[`K${row}`] = { f: `I${row}-J${row}`, t: 'n', z: '0.0' }
         } else {
@@ -614,7 +632,7 @@ ${orderItems.length === 0 ? '<p style="color:#6b7280;margin-top:16px">No items t
   return (
     <>
       <Head>
-        <title>Paynter Bar</title>
+        <title>Paynter Bar Hub</title>
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
       </Head>
@@ -623,10 +641,10 @@ ${orderItems.length === 0 ? '<p style="color:#6b7280;margin-top:16px">No items t
           <div style={styles.headerInner}>
             <div>
               <div style={styles.headerTop}>
-                <span style={styles.logo}>PAYNTER BAR</span>
+                <span style={styles.logo}>PAYNTER BAR HUB</span>
                 <span style={styles.logoSub}>GemLife Palmwoods</span>
               </div>
-              <h1 style={styles.title}>{mainTab === 'sales' ? 'Sales Report' : 'Reorder Planner'}</h1>
+              <h1 style={styles.title}>{mainTab === 'sales' ? 'Sales Report' : mainTab === 'help' ? 'Help & Guide' : 'Reorder Planner'}</h1>
             </div>
             <div style={styles.headerRight}>
               {lastUpdated && <span style={styles.lastUpdated}>Updated {new Date(lastUpdated).toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit' })}</span>}
@@ -640,6 +658,10 @@ ${orderItems.length === 0 ? '<p style="color:#6b7280;margin-top:16px">No items t
                     if (next === 'sales' && !salesReport) loadSalesReport(salesPeriod, salesCustom)
                   }}>
                   {mainTab === 'sales' ? '← Reorder' : '📊 Sales Report'}
+                </button>
+                <button style={{ ...styles.btn, background: mainTab === 'help' ? '#1e293b' : '#475569' }}
+                  onClick={() => setMainTab(t => t === 'help' ? 'reorder' : 'help')}>
+                  {mainTab === 'help' ? '← Back' : '❓ Help'}
                 </button>
                 <button style={{ ...styles.btn, ...(refreshing ? styles.btnDisabled : {}) }}
                   onClick={() => loadItems(true)} disabled={refreshing}>
@@ -870,13 +892,142 @@ ${orderItems.length === 0 ? '<p style="color:#6b7280;margin-top:16px">No items t
           </>
         )}
 
+        {mainTab === 'help' && <HelpTab />}
+
         <footer style={styles.footer}>
-          Paynter Bar - GemLife Palmwoods | Data from Square POS | {items.length} items tracked
+          Paynter Bar Hub — GemLife Palmwoods | Data from Square POS | {items.length} items tracked
         </footer>
       </div>
     </>
   )
 }
+
+// ─── HELP TAB ─────────────────────────────────────────────────────────────────
+function HelpTab() {
+  const sections = [
+    {
+      icon: '🔐',
+      title: 'Getting Started',
+      items: [
+        { q: 'Logging in', a: 'Enter PIN 3838 on the login screen. Your session stays active until you close the browser tab. The app works on any device — phone, tablet or laptop.' },
+        { q: 'Refreshing data', a: 'Click Refresh in the top-right to pull the latest stock levels and sales from Square POS. Always reflects what Square knows right now.' },
+        { q: 'Sales period', a: 'The 30d / 60d / 90d buttons set how many days of sales history are used to calculate weekly averages. 90 days gives the most stable average; 30 days is more responsive to recent trends.' },
+      ]
+    },
+    {
+      icon: '📦',
+      title: 'Reorder Planner',
+      items: [
+        { q: 'Reading the table', a: 'Each row shows current stock (On Hand), weekly average sales, target stock level, and how much to order. Red = CRITICAL (below target), yellow = LOW, green = OK.' },
+        { q: 'Order Qty vs Bottles', a: 'For spirits and fortified wines, Order Qty shows nips needed and Bottles shows full bottles to buy (rounded up). For all other items, Order Qty shows units to order.' },
+        { q: 'Target Weeks', a: 'Click the number in the header stats bar to change how many weeks of stock to hold. Default is 6 weeks. Affects all items\' target stock calculations.' },
+        { q: 'Filtering to order items', a: 'Tick "Order items only" in the controls bar to hide items that don\'t need ordering — useful when preparing orders.' },
+        { q: 'Supplier tabs', a: 'Click Dan Murphys, Coles Woolies or ACW to filter the table to just that supplier. Use + Supplier to add a new supplier.' },
+        { q: 'Editing item settings', a: 'Click any value in the Category, Supplier, Pack, Bottle Size or Nip Size columns to edit inline. Changes save automatically to the cloud and are shared with all committee members.' },
+        { q: 'Adding notes', a: 'Click the Notes column for any item to add a note (e.g. "Discontinued", "Check price"). Notes are saved and visible to all.' },
+      ]
+    },
+    {
+      icon: '🥃',
+      title: 'Spirits & Fortified Wines',
+      items: [
+        { q: 'How spirits are tracked', a: 'Square tracks spirits in nips (30ml standard, 60ml for Baileys, Galway Pipe Port and Penfolds Club Port). All calculations — weekly average, target stock, order quantities — stay in nips throughout.' },
+        { q: 'Bottle Size column', a: 'Set to 700ml, 750ml or 1000ml per item. Determines how many nips per bottle (e.g. 700ml ÷ 30ml = 23.3 nips). Affects order quantities and stocktake calculations.' },
+        { q: 'Nip Size column', a: 'Most spirits are 30ml. Baileys Irish Cream, Galway Pipe Port and Penfolds Club Port are served as 60ml nips. Must be set correctly for accurate order quantities and stocktake counts.' },
+        { q: 'Order quantities', a: 'Shows nips needed to reach target stock. Bottles column shows full bottles to buy (always rounded up). Example: need 70 nips from 700ml bottle → Order Qty 70, Bottles 3.' },
+      ]
+    },
+    {
+      icon: '💲',
+      title: 'Pricing Mode',
+      items: [
+        { q: 'Enabling pricing', a: 'Click $ Pricing in the controls bar to reveal Buy Price, Sell Price and Margin % columns.' },
+        { q: 'Sell prices from Square', a: 'Sell prices are imported automatically from your Square catalogue. Items marked "from Square" have been auto-populated. Click any price to override it.' },
+        { q: 'Margin calculation', a: 'Margin % = (Sell − Buy) ÷ Sell × 100. Green = 40%+, amber = 20–40%, red = below 20%. Requires both buy and sell price to be set.' },
+        { q: 'Buy prices', a: 'Click the Buy Price cell for any item and type the cost price. Saved to the cloud and shared across all sessions.' },
+      ]
+    },
+    {
+      icon: '📊',
+      title: 'Sales Report',
+      items: [
+        { q: 'Opening the report', a: 'Click 📊 Sales Report in the top-right header. Data is fetched live from Square\'s Orders API — allow a few seconds to load.' },
+        { q: 'Period selector', a: 'Choose This Month, Last 3 Months, or a Custom date range. Each period automatically compares against the equivalent prior period.' },
+        { q: 'Category breakdown', a: 'Click any category tile to filter the item table to just that category. Click again (or ALL) to reset.' },
+        { q: 'Revenue figures', a: 'Revenue comes directly from Square\'s transaction records — the actual price charged at time of sale, not a calculation from current prices.' },
+        { q: 'Sort order', a: 'Toggle between By Units and By Revenue using the buttons above the item table.' },
+      ]
+    },
+    {
+      icon: '🖨️',
+      title: 'Printing & Exports',
+      items: [
+        { q: 'Print Order Sheet', a: 'Click Print Order Sheet → choose a supplier to open a print-ready order form. Use your browser\'s Print dialog or Save as PDF.' },
+        { q: '📋 Stock PDF', a: 'Generates a Stock on Hand management report from current Square data — all items by category with status and order quantities. Print dialog opens automatically.' },
+        { q: '📈 Sales PDF', a: 'Generates a Monthly Sales Report for the previous completed month — category breakdown, top 10 sellers, revenue and prior month comparisons. Best run on the 1st of each month.' },
+        { q: 'Export Stocktake', a: 'Downloads an Excel spreadsheet for quarterly stocktakes. Count columns for Cool Room, Store Room and Bar. For spirits, enter decimal bottles (e.g. 4.5) — the sheet calculates nips automatically and shows the variance against Square.' },
+      ]
+    },
+    {
+      icon: '⚙️',
+      title: 'Settings & Administration',
+      items: [
+        { q: 'Shared settings', a: 'All settings (categories, suppliers, pack sizes, bottle/nip sizes, prices, notes, target weeks) are saved to the cloud. Any committee member sees the same settings on any device.' },
+        { q: 'Adding suppliers', a: 'Use the + Supplier button in the controls bar. Assign items to suppliers by clicking the Supplier column inline.' },
+        { q: 'Item categories', a: 'Available categories: Beer, Cider, PreMix, White Wine, Red Wine, Rose, Sparkling, Fortified & Liqueurs, Spirits, Soft Drinks, Snacks. Spirits and Fortified & Liqueurs items get the bottle and nip size columns.' },
+        { q: 'Square POS connection', a: 'The app connects to your Square account via API. Stock levels and sales update on every Refresh. Square remains the source of truth — all transactions happen through Square as normal.' },
+      ]
+    },
+  ]
+
+  return (
+    <div style={{ padding: '32px', maxWidth: 900, margin: '0 auto' }}>
+      <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #e2e8f0', padding: '24px 32px', marginBottom: 24 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 16 }}>
+          <div style={{ width: 48, height: 48, background: '#0f172a', borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 24 }}>🍺</div>
+          <div>
+            <h2 style={{ fontSize: 20, fontWeight: 700, color: '#0f172a', margin: 0 }}>Paynter Bar Hub</h2>
+            <p style={{ fontSize: 13, color: '#64748b', margin: '3px 0 0' }}>GemLife Palmwoods — Bar Management System</p>
+          </div>
+        </div>
+        <p style={{ fontSize: 13, color: '#475569', lineHeight: 1.7, margin: 0 }}>
+          This app manages bar operations for the Paynter Bar volunteer team. It connects directly to Square POS to provide
+          live stock levels, sales analytics, automated reorder calculations and management reports — all in one place.
+          Settings and changes made by any committee member are shared across all devices instantly.
+        </p>
+      </div>
+
+      {sections.map(section => (
+        <div key={section.title} style={{ background: '#fff', borderRadius: 12, border: '1px solid #e2e8f0', marginBottom: 16, overflow: 'hidden' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '14px 20px', borderBottom: '1px solid #e2e8f0', background: '#f8fafc' }}>
+            <span style={{ fontSize: 18 }}>{section.icon}</span>
+            <h3 style={{ fontSize: 13, fontWeight: 700, color: '#0f172a', margin: 0, textTransform: 'uppercase', letterSpacing: '0.06em' }}>{section.title}</h3>
+          </div>
+          <div>
+            {section.items.map((item, idx) => (
+              <div key={idx} style={{ display: 'flex', borderBottom: idx < section.items.length - 1 ? '1px solid #f1f5f9' : 'none' }}>
+                <div style={{ width: 220, minWidth: 220, padding: '11px 20px', borderRight: '1px solid #f1f5f9', background: '#fafafa' }}>
+                  <span style={{ fontSize: 12, fontWeight: 600, color: '#374151' }}>{item.q}</span>
+                </div>
+                <div style={{ flex: 1, padding: '11px 20px' }}>
+                  <span style={{ fontSize: 12, color: '#4b5563', lineHeight: 1.65 }}>{item.a}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
+
+      <div style={{ background: '#f8fafc', borderRadius: 12, border: '1px solid #e2e8f0', padding: '16px 20px', textAlign: 'center' }}>
+        <p style={{ fontSize: 11, color: '#94a3b8', margin: 0, lineHeight: 1.8 }}>
+          Paynter Bar Hub — Built for Paynter Bar Committee, GemLife Palmwoods<br />
+          Data source: Square POS · Settings stored in Vercel KV · Deployed on Vercel
+        </p>
+      </div>
+    </div>
+  )
+}
+
 
 // ─── SALES REPORT VIEW ────────────────────────────────────────────────────────
 function SalesView({ period, setPeriod, custom, setCustom, report, loading, error, category, setCategory, sort, setSort, onLoad }) {
