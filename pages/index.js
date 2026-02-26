@@ -513,20 +513,66 @@ ${orderItems.length === 0 ? '<p style="color:#6b7280;margin-top:16px">No items t
     const script = document.createElement('script')
     script.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js'
     script.onload = () => {
+      // Columns:
+      // A=Item, B=Category, C=Supplier,
+      // D=Cool Room, E=Store Room, F=Bar,
+      // G=Total Count (=D+E+F)  [bottles (decimal) for spirits, units for others]
+      // H=Nips/Bottle           [pre-filled for spirits, blank for others]
+      // I=Total Nips            [=G*H for spirits, blank for others]
+      // J=Square On Hand        [nips for spirits, units for others]
+      // K=Difference            [=I-J for spirits, =G-J for others]
+
       const rows = displayed.map(item => ({
-        'Item': item.name, 'Category': item.category, 'Supplier': item.supplier,
-        'Cool Room': '', 'Store Room': '', 'Bar': '', 'Total Count': '',
-        'Square On Hand': item.onHand, 'Difference': '',
+        'Item':           item.name,
+        'Category':       item.category,
+        'Supplier':       item.supplier,
+        'Cool Room':      '',
+        'Store Room':     '',
+        'Bar':            '',
+        'Total Count':    '',
+        'Nips/Bottle':    item.isSpirit ? (item.bottleML || 700) / (item.nipML || 30) : '',
+        'Total Nips':     '',
+        'Square On Hand': item.onHand,
+        'Difference':     '',
       }))
+
       const ws = window.XLSX.utils.json_to_sheet(rows)
-      ws['!cols'] = [{ wch: 40 },{ wch: 18 },{ wch: 16 },{ wch: 12 },{ wch: 12 },{ wch: 10 },{ wch: 13 },{ wch: 16 },{ wch: 12 }]
+
+      ws['!cols'] = [
+        { wch: 40 }, // A Item
+        { wch: 18 }, // B Category
+        { wch: 16 }, // C Supplier
+        { wch: 12 }, // D Cool Room
+        { wch: 12 }, // E Store Room
+        { wch: 8  }, // F Bar
+        { wch: 13 }, // G Total Count
+        { wch: 12 }, // H Nips/Bottle
+        { wch: 12 }, // I Total Nips
+        { wch: 16 }, // J Square On Hand
+        { wch: 12 }, // K Difference
+      ]
       ws['!freeze'] = { xSplit: 0, ySplit: 1 }
+
       const range = window.XLSX.utils.decode_range(ws['!ref'])
-      for (let r = 1; r <= range.e.r; r++) {
-        const row = r + 1
+
+      // Style helpers — shade spirits rows lightly
+      displayed.forEach((item, idx) => {
+        const row = idx + 2 // 1-indexed, row 1 is header
+        // G = Total Count = D+E+F (bottles or units)
         ws[`G${row}`] = { f: `D${row}+E${row}+F${row}`, t: 'n' }
-        ws[`I${row}`] = { f: `G${row}-H${row}`, t: 'n' }
-      }
+
+        if (item.isSpirit) {
+          // I = Total Nips = Total Count × Nips/Bottle
+          ws[`I${row}`] = { f: `G${row}*H${row}`, t: 'n' }
+          // K = Difference = Total Nips − Square On Hand
+          ws[`K${row}`] = { f: `I${row}-J${row}`, t: 'n' }
+        } else {
+          // Non-spirits: no nips conversion, diff = Total Count − Square On Hand
+          ws[`I${row}`] = { v: '', t: 's' }
+          ws[`K${row}`] = { f: `G${row}-J${row}`, t: 'n' }
+        }
+      })
+
       const wb = window.XLSX.utils.book_new()
       window.XLSX.utils.book_append_sheet(wb, ws, 'Stocktake')
       window.XLSX.writeFile(wb, `Paynter-Bar-Stocktake-${new Date().toISOString().split('T')[0]}.xlsx`)
