@@ -1184,21 +1184,84 @@ ${orderItems.length === 0 ? '<p style="color:#6b7280;margin-top:16px">No items t
 }
 
 // ─── TRENDS VIEW ──────────────────────────────────────────────────────────────
+const TREND_CAT_COLORS = {
+  'Beer':                 '#2563eb',
+  'Cider':                '#0891b2',
+  'PreMix':               '#7c3aed',
+  'White Wine':           '#ca8a04',
+  'Red Wine':             '#dc2626',
+  'Rose':                 '#db2777',
+  'Sparkling':            '#0f766e',
+  'Fortified & Liqueurs': '#9a3412',
+  'Spirits':              '#4338ca',
+  'Soft Drinks':          '#16a34a',
+  'Snacks':               '#64748b',
+}
+const TREND_CHART_W = 680, TREND_CHART_H = 200, TREND_PAD_L = 50, TREND_PAD_T = 20, TREND_PAD_R = 20, TREND_PAD_B = 40
+
+function CategoryChart({ cat, data, hasRev }) {
+  const chartW = TREND_CHART_W, chartH = TREND_CHART_H, padL = TREND_PAD_L, padT = TREND_PAD_T, padR = TREND_PAD_R
+  const innerW = chartW - padL - padR
+  const innerH = chartH - padT - TREND_PAD_B
+  const vals   = data.map(q => q.categories[cat]?.unitsSold || 0)
+  const revs   = data.map(q => q.categories[cat]?.revenue  || 0)
+  const maxVal = Math.max(...vals, 1)
+  const color  = TREND_CAT_COLORS[cat] || '#2563eb'
+  const barW   = Math.floor(innerW / data.length) - 16
+  const trend  = vals[vals.length-1] - vals[0]
+  const trendColor = trend > 0 ? '#16a34a' : trend < 0 ? '#dc2626' : '#64748b'
+  const trendIcon  = trend > 0 ? '▲' : trend < 0 ? '▼' : '→'
+  const total      = vals.reduce((s, v) => s + v, 0)
+
+  const bars = data.map((q, i) => {
+    const bh = Math.round((vals[i] / maxVal) * innerH)
+    const x  = padL + i * (innerW / data.length) + 8
+    const y  = padT + innerH - bh
+    return (
+      <g key={i}>
+        <rect x={x} y={y} width={barW} height={bh} fill={color} rx={3} opacity={0.85}/>
+        <text x={x + barW/2} y={y - 5} textAnchor="middle" fontSize={10} fill="#0f172a" fontWeight="600">{vals[i]}</text>
+        <text x={x + barW/2} y={padT + innerH + 14} textAnchor="middle" fontSize={9} fill="#475569">{q.label.split(' ').slice(0,2).join(' ')}</text>
+        {hasRev && <text x={x + barW/2} y={padT + innerH + 26} textAnchor="middle" fontSize={8} fill="#16a34a">${revs[i] ? revs[i].toFixed(0) : '—'}</text>}
+      </g>
+    )
+  })
+
+  const grids = [0.5, 1].map(pct => {
+    const y   = padT + innerH - Math.round(pct * innerH)
+    const val = Math.round(pct * maxVal)
+    return (
+      <g key={pct}>
+        <line x1={padL} y1={y} x2={chartW - padR} y2={y} stroke="#e2e8f0" strokeWidth={1}/>
+        <text x={padL - 4} y={y + 4} textAnchor="end" fontSize={9} fill="#94a3b8">{val}</text>
+      </g>
+    )
+  })
+
+  return (
+    <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 10, padding: '16px 20px', marginBottom: 16 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div style={{ width: 12, height: 12, borderRadius: 3, background: color }}/>
+          <span style={{ fontWeight: 700, fontSize: 14, color: '#0f172a' }}>{cat}</span>
+        </div>
+        <div style={{ display: 'flex', gap: 20, fontSize: 11 }}>
+          <span style={{ color: '#64748b' }}>4-quarter total: <strong style={{ color: '#0f172a' }}>{total.toLocaleString()} units</strong></span>
+          <span style={{ color: trendColor, fontWeight: 700 }}>{trendIcon} {Math.abs(trend)} units {trend >= 0 ? 'up' : 'down'} vs 4 qtrs ago</span>
+        </div>
+      </div>
+      <svg width="100%" viewBox={`0 0 ${chartW} ${chartH + (hasRev ? 10 : 0)}`} style={{ overflow: 'visible' }}>
+        <line x1={padL} y1={padT} x2={padL} y2={padT + innerH} stroke="#cbd5e1" strokeWidth={1}/>
+        <line x1={padL} y1={padT + innerH} x2={chartW - padR} y2={padT + innerH} stroke="#cbd5e1" strokeWidth={1}/>
+        {grids}
+        {bars}
+      </svg>
+    </div>
+  )
+}
+
 function TrendsView({ data, loading, error }) {
   const CATEGORY_ORDER = ['Beer','Cider','PreMix','White Wine','Red Wine','Rose','Sparkling','Fortified & Liqueurs','Spirits','Soft Drinks','Snacks']
-  const CAT_COLORS = {
-    'Beer':                 '#2563eb',
-    'Cider':                '#0891b2',
-    'PreMix':               '#7c3aed',
-    'White Wine':           '#ca8a04',
-    'Red Wine':             '#dc2626',
-    'Rose':                 '#db2777',
-    'Sparkling':            '#0f766e',
-    'Fortified & Liqueurs': '#9a3412',
-    'Spirits':              '#4338ca',
-    'Soft Drinks':          '#16a34a',
-    'Snacks':               '#64748b',
-  }
 
   if (loading) return (
     <div style={{ padding: 60, textAlign: 'center', color: '#64748b' }}>
@@ -1214,80 +1277,11 @@ function TrendsView({ data, loading, error }) {
   )
   if (!data) return null
 
-  // Build per-category data across quarters
-  const allCats = CATEGORY_ORDER.filter(c => data.some(q => q.categories[c]))
-  const hasRev  = data.some(q => q.totals.revenue > 0)
-
-  // Chart dimensions
-  const chartW = 680, chartH = 200, padL = 50, padB = 40, padT = 20, padR = 20
-  const innerW = chartW - padL - padR
-  const innerH = chartH - padT - padB
-
-  function CategoryChart({ cat }) {
-    const vals   = data.map(q => q.categories[cat]?.unitsSold || 0)
-    const revs   = data.map(q => q.categories[cat]?.revenue  || 0)
-    const maxVal = Math.max(...vals, 1)
-    const color  = CAT_COLORS[cat] || '#2563eb'
-    const barW   = Math.floor(innerW / data.length) - 16
-    const trend  = vals[vals.length-1] - vals[0]
-
-    const bars = data.map((q, i) => {
-      const bh = Math.round((vals[i] / maxVal) * innerH)
-      const x  = padL + i * (innerW / data.length) + 8
-      const y  = padT + innerH - bh
-      const lbl = q.label.split(' ')[0] + '\n' + q.label.split(' ').slice(1).join(' ')
-      return (
-        <g key={i}>
-          <rect x={x} y={y} width={barW} height={bh} fill={color} rx={3} opacity={0.85}/>
-          <text x={x + barW/2} y={y - 5} textAnchor="middle" fontSize={10} fill="#0f172a" fontWeight="600">{vals[i]}</text>
-          <text x={x + barW/2} y={padT + innerH + 14} textAnchor="middle" fontSize={9} fill="#475569">{q.label.split(' ').slice(0,2).join(' ')}</text>
-          {hasRev && <text x={x + barW/2} y={padT + innerH + 26} textAnchor="middle" fontSize={8} fill="#16a34a">${revs[i] ? revs[i].toFixed(0) : '—'}</text>}
-        </g>
-      )
-    })
-
-    // Y gridlines
-    const grids = [0.5, 1].map(pct => {
-      const y   = padT + innerH - Math.round(pct * innerH)
-      const val = Math.round(pct * maxVal)
-      return (
-        <g key={pct}>
-          <line x1={padL} y1={y} x2={chartW - padR} y2={y} stroke="#e2e8f0" strokeWidth={1}/>
-          <text x={padL - 4} y={y + 4} textAnchor="end" fontSize={9} fill="#94a3b8">{val}</text>
-        </g>
-      )
-    })
-
-    const trendColor = trend > 0 ? '#16a34a' : trend < 0 ? '#dc2626' : '#64748b'
-    const trendIcon  = trend > 0 ? '▲' : trend < 0 ? '▼' : '→'
-    const total      = vals.reduce((s, v) => s + v, 0)
-
-    return (
-      <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 10, padding: '16px 20px', marginBottom: 16 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <div style={{ width: 12, height: 12, borderRadius: 3, background: color }}/>
-            <span style={{ fontWeight: 700, fontSize: 14, color: '#0f172a' }}>{cat}</span>
-          </div>
-          <div style={{ display: 'flex', gap: 20, fontSize: 11 }}>
-            <span style={{ color: '#64748b' }}>4-quarter total: <strong style={{ color: '#0f172a' }}>{total.toLocaleString()} units</strong></span>
-            <span style={{ color: trendColor, fontWeight: 700 }}>{trendIcon} {Math.abs(trend)} units {trend >= 0 ? 'up' : 'down'} vs 4 qtrs ago</span>
-          </div>
-        </div>
-        <svg width="100%" viewBox={`0 0 ${chartW} ${chartH + (hasRev ? 10 : 0)}`} style={{ overflow: 'visible' }}>
-          <line x1={padL} y1={padT} x2={padL} y2={padT + innerH} stroke="#cbd5e1" strokeWidth={1}/>
-          <line x1={padL} y1={padT + innerH} x2={chartW - padR} y2={padT + innerH} stroke="#cbd5e1" strokeWidth={1}/>
-          {grids}
-          {bars}
-        </svg>
-      </div>
-    )
-  }
-
-  // Summary row — all categories totals
-  const qLabels = data.map(q => q.label)
+  const allCats    = CATEGORY_ORDER.filter(c => data.some(q => q.categories[c]))
+  const hasRev     = data.some(q => q.totals.revenue > 0)
+  const qLabels    = data.map(q => q.label)
   const grandTotals = data.map(q => q.totals.unitsSold)
-  const maxGrand = Math.max(...grandTotals, 1)
+  const maxGrand   = Math.max(...grandTotals, 1)
 
   return (
     <div style={{ padding: '28px 32px', maxWidth: 900, margin: '0 auto' }}>
@@ -1305,12 +1299,11 @@ function TrendsView({ data, loading, error }) {
             ))}
           </div>
         </div>
-        {/* Mini overall trend bars */}
         <svg width="100%" viewBox="0 0 680 60" style={{ overflow: 'visible' }}>
           {data.map((q, i) => {
-            const bh  = Math.round((grandTotals[i] / maxGrand) * 40)
-            const x   = 10 + i * 165
-            const y   = 50 - bh
+            const bh = Math.round((grandTotals[i] / maxGrand) * 40)
+            const x  = 10 + i * 165
+            const y  = 50 - bh
             return (
               <g key={i}>
                 <rect x={x} y={y} width={150} height={bh} fill="#0f172a" rx={3} opacity={0.15}/>
@@ -1323,7 +1316,7 @@ function TrendsView({ data, loading, error }) {
         </svg>
       </div>
 
-      {allCats.map(cat => <CategoryChart key={cat} cat={cat} />)}
+      {allCats.map(cat => <CategoryChart key={cat} cat={cat} data={data} hasRev={hasRev} />)}
     </div>
   )
 }
