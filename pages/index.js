@@ -1355,7 +1355,7 @@ function HelpTab() {
       icon: '🔐',
       title: 'Getting Started',
       items: [
-        { q: 'Logging in', a: 'Enter PIN 3838 on the login screen. Your session stays active until you close the browser tab. The app works on any device — phone, tablet or laptop.' },
+        { q: 'Logging in', a: 'Enter your PIN on the login screen. Your session stays active until you close the browser tab. The app works on any device — phone, tablet or laptop.' },
         { q: 'Refreshing data', a: 'Click Refresh in the top-right to pull the latest stock levels and sales from Square POS. Always reflects what Square knows right now.' },
         { q: 'Sales period', a: 'The 30d / 60d / 90d buttons set how many days of sales history are used to calculate weekly averages. 90 days gives the most stable average; 30 days is more responsive to recent trends.' },
       ]
@@ -1432,7 +1432,7 @@ function HelpTab() {
         { q: 'Homeowners committee access', a: 'Read-only access. All data is visible — stock levels, order quantities, sales reports, trends charts and PDF reports — but nothing can be edited or changed. A READ ONLY badge is shown in the header when logged in with the homeowners PIN.' },
         { q: 'What read-only users can view', a: 'Stock on hand, weekly averages, order quantities, item status (Critical/Low/OK), sales reports, quarterly trends, category breakdowns, top sellers, and all PDF reports including the AGM annual report.' },
         { q: 'What read-only users cannot do', a: 'Edit any item settings (category, supplier, pack size, bottle size, nip size, notes), change buy or sell prices, export the stocktake spreadsheet, add suppliers, or change the target weeks stock level.' },
-        { q: 'Pricing visibility', a: 'Buy and sell prices are only visible to committee members (PIN 3838). The $ Pricing view is hidden entirely for read-only users to keep cost prices confidential.' },
+        { q: 'Pricing visibility', a: 'Buy and sell prices are only visible to committee members. The $ Pricing view is hidden entirely for read-only users to keep cost prices confidential.' },
       ]
     },
   ]
