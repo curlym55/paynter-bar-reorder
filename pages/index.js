@@ -23,6 +23,7 @@ const CATEGORY_ORDER_LIST = [
 
 export default function Home() {
   const [authed, setAuthed]             = useState(false)
+  const [readOnly, setReadOnly]         = useState(false)
   const [pin, setPin]                   = useState('')
   const [pinError, setPinError]         = useState(false)
   const [items, setItems]               = useState([])
@@ -55,12 +56,24 @@ export default function Home() {
   const [agmLoading, setAgmLoading]     = useState(false)
 
   useEffect(() => {
-    if (sessionStorage.getItem('bar_authed') === 'yes') setAuthed(true)
+    if (sessionStorage.getItem('bar_authed') === 'yes') {
+      setAuthed(true)
+      if (sessionStorage.getItem('bar_readonly') === 'yes') setReadOnly(true)
+    }
   }, [])
 
   function checkPin() {
+    if (pin === '5554') {
+      sessionStorage.setItem('bar_authed', 'yes')
+      sessionStorage.setItem('bar_readonly', 'yes')
+      setReadOnly(true)
+      setAuthed(true)
+      setPin('')
+      return
+    }
     if (pin === '3838') {
       sessionStorage.setItem('bar_authed', 'yes')
+      sessionStorage.removeItem('bar_readonly')
       setAuthed(true)
       setPinError(false)
     } else {
@@ -926,6 +939,7 @@ ${orderItems.length === 0 ? '<p style="color:#6b7280;margin-top:16px">No items t
             <div>
               <div style={styles.headerTop}>
                 <span style={styles.logo}>PAYNTER BAR HUB</span>
+                {readOnly && <span style={{ fontSize: 10, background: '#fef9c3', color: '#854d0e', border: '1px solid #fde68a', borderRadius: 4, padding: '2px 7px', fontWeight: 700, letterSpacing: '0.05em' }}>READ ONLY</span>}
                 <span style={styles.logoSub}>GemLife Palmwoods</span>
               </div>
               <h1 style={styles.title}>{mainTab === 'sales' ? 'Sales Report' : mainTab === 'trends' ? 'Quarterly Trends' : mainTab === 'help' ? 'Help & Guide' : 'Reorder Planner'}</h1>
@@ -958,6 +972,7 @@ ${orderItems.length === 0 ? '<p style="color:#6b7280;margin-top:16px">No items t
                   onClick={() => loadItems(true)} disabled={refreshing}>
                   {refreshing ? 'Refreshing...' : 'Refresh'}
                 </button>
+                {readOnly && <span style={{ fontSize: 11, color: '#94a3b8', alignSelf: 'center', paddingRight: 4 }}>👁 View only</span>}
               </div>
             </div>
           </div>
@@ -1105,32 +1120,32 @@ ${orderItems.length === 0 ? '<p style="color:#6b7280;margin-top:16px">No items t
                         <td style={styles.td}>
                           <EditSelect value={item.category} options={CATEGORIES}
                             onChange={v => saveSetting(item.name, 'category', v)}
-                            saving={saving[`${item.name}_category`]} />
+                            saving={saving[`${item.name}_category`]} readOnly={readOnly} />
                         </td>
                         <td style={styles.td}>
                           <EditSelect value={item.supplier} options={suppliers}
                             onChange={v => saveSetting(item.name, 'supplier', v)}
-                            saving={saving[`${item.name}_supplier`]} colorMap={SUPPLIER_COLORS} />
+                            saving={saving[`${item.name}_supplier`]} colorMap={SUPPLIER_COLORS} readOnly={readOnly} />
                         </td>
                         <td style={{ ...styles.td, textAlign: 'right', fontFamily: 'IBM Plex Mono, monospace' }}>{item.onHand}</td>
                         <td style={{ ...styles.td, textAlign: 'right', fontFamily: 'IBM Plex Mono, monospace' }}>{item.weeklyAvg}</td>
                         <td style={{ ...styles.td, textAlign: 'right', fontFamily: 'IBM Plex Mono, monospace' }}>{item.targetStock}</td>
                         <td style={{ ...styles.td, textAlign: 'center' }}>
                           <EditNumber value={item.pack} onChange={v => saveSetting(item.name, 'pack', v)}
-                            saving={saving[`${item.name}_pack`]} min={1} />
+                            saving={saving[`${item.name}_pack`]} min={1} readOnly={readOnly} />
                         </td>
                         <td style={{ ...styles.td, textAlign: 'center' }}>
                           {item.isSpirit ? (
                             <EditSelect value={String(item.bottleML)} options={['700', '750', '1000']}
                               onChange={v => saveSetting(item.name, 'bottleML', Number(v))}
-                              saving={saving[`${item.name}_bottleML`]} />
+                              saving={saving[`${item.name}_bottleML`]} readOnly={readOnly} />
                           ) : <span style={{ color: '#e2e8f0' }}>—</span>}
                         </td>
                         <td style={{ ...styles.td, textAlign: 'center' }}>
                           {item.isSpirit ? (
                             <EditSelect value={String(item.nipML || 30)} options={['30', '60']}
                               onChange={v => saveSetting(item.name, 'nipML', Number(v))}
-                              saving={saving[`${item.name}_nipML`]} />
+                              saving={saving[`${item.name}_nipML`]} readOnly={readOnly} />
                           ) : <span style={{ color: '#e2e8f0' }}>—</span>}
                         </td>
                         <td style={{ ...styles.td, textAlign: 'right', fontWeight: 700, fontFamily: 'IBM Plex Mono, monospace', fontSize: 15 }}>
@@ -1146,7 +1161,7 @@ ${orderItems.length === 0 ? '<p style="color:#6b7280;margin-top:16px">No items t
                         </td>
                         <td style={styles.td}>
                           <EditText value={item.notes || ''} onChange={v => saveSetting(item.name, 'notes', v)}
-                            saving={saving[`${item.name}_notes`]} placeholder="Add note..." />
+                            saving={saving[`${item.name}_notes`]} placeholder="Add note..." readOnly={readOnly} />
                         </td>
                         {viewMode === 'pricing' && (() => {
                           const buy  = item.buyPrice  !== '' && item.buyPrice  != null ? Number(item.buyPrice)  : null
@@ -1159,7 +1174,7 @@ ${orderItems.length === 0 ? '<p style="color:#6b7280;margin-top:16px">No items t
                             <td style={{ ...styles.td, textAlign: 'right' }}>
                               <EditNumber value={buy ?? ''} placeholder="$0.00" decimals={2} prefix="$"
                                 onChange={v => saveSetting(item.name, 'buyPrice', v)}
-                                saving={saving[`${item.name}_buyPrice`]} min={0} />
+                                saving={saving[`${item.name}_buyPrice`]} min={0} readOnly={readOnly} />
                             </td>
                             <td style={{ ...styles.td, textAlign: 'right' }}>
                               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 1 }}>
@@ -1679,7 +1694,8 @@ function EditNumber({ value, onChange, saving, min, placeholder, decimals, prefi
     onClick={() => setEditing(true)} title="Click to edit">{display}</span>
 }
 
-function EditText({ value, onChange, saving, placeholder }) {
+function EditText({ value, onChange, saving, placeholder, readOnly }) {
+  if (readOnly) return <span style={{ fontSize: 12, color: value ? '#374151' : '#e2e8f0' }}>{value || '—'}</span>
   const [editing, setEditing] = useState(false)
   const [val, setVal] = useState(value)
   useEffect(() => setVal(value), [value])
