@@ -559,17 +559,14 @@ ${orderItems.length === 0 ? '<p style="color:#6b7280;margin-top:16px">No items t
       displayed.forEach((item, idx) => {
         const row = idx + 2 // 1-indexed, row 1 is header
         // G = Total Count = D+E+F (bottles or units)
-        ws[`G${row}`] = { f: `D${row}+E${row}+F${row}`, t: 'n' }
+        ws[`G${row}`] = { f: `D${row}+E${row}+F${row}`, t: 'n', z: '0.0' }
 
         if (item.isSpirit) {
-          // I = Total Nips = Total Count × Nips/Bottle
-          ws[`I${row}`] = { f: `G${row}*H${row}`, t: 'n' }
-          // K = Difference = Total Nips − Square On Hand
-          ws[`K${row}`] = { f: `I${row}-J${row}`, t: 'n' }
+          ws[`I${row}`] = { f: `G${row}*H${row}`, t: 'n', z: '0.0' }
+          ws[`K${row}`] = { f: `I${row}-J${row}`, t: 'n', z: '0.0' }
         } else {
-          // Non-spirits: no nips conversion, diff = Total Count − Square On Hand
           ws[`I${row}`] = { v: '', t: 's' }
-          ws[`K${row}`] = { f: `G${row}-J${row}`, t: 'n' }
+          ws[`K${row}`] = { f: `G${row}-J${row}`, t: 'n', z: '0.0' }
         }
       })
 
