@@ -523,154 +523,98 @@ export default function Home() {
     // Group visible items by category
     const grouped = {}
     for (const item of items) {
-      const pl   = settings[item.name] || {}
+      const pl  = settings[item.name] || {}
       if (pl.hidden) continue
-      const cat  = item.category || 'Other'
+      const cat = item.category || 'Other'
       const price = item.sellPrice != null ? item.sellPrice : item.squareSellPrice
       const label = pl.label || item.name
-      if (!grouped[cat]) grouped[cat] = []
       const variations = (item.variations || []).filter(v => v.price != null)
+      if (!grouped[cat]) grouped[cat] = []
       grouped[cat].push({ label, price, variations: variations.length > 1 ? variations : null })
     }
 
-    // Split categories across two pages by item count (balance the pages)
     const cats = CATEGORY_ORDER.filter(c => grouped[c])
-    // Count rows per category (variations count as extra rows)
-    const itemCount = cat => grouped[cat].reduce((s, i) => s + (i.variations ? i.variations.length : 1), 0)
-    const totalItems = cats.reduce((s, c) => s + itemCount(c), 0)
-    const halfItems = totalItems / 2
-    let running = 0, splitAt = 0
-    for (let i = 0; i < cats.length; i++) {
-      running += itemCount(cats[i])
-      if (running >= halfItems) { splitAt = i + 1; break }
-    }
-    if (splitAt === 0) splitAt = Math.ceil(cats.length / 2)
-    const page1cats = cats.slice(0, splitAt)
-    const page2cats = cats.slice(splitAt)
 
-    function renderCategoryCard(cat) {
-      return `
-        <div class="category-card">
-          <div class="cat-header">${cat}</div>
-          <table class="price-table">
-            ${grouped[cat].map(({ label, price, variations }) => `
-              <tr>
-                <td class="item-name">${label}</td>
-                <td class="item-price">${variations
-                  ? variations.map(v => `<div class="var-row"><span class="var-name">${v.name}</span><span>$${Number(v.price).toFixed(2)}</span></div>`).join('')
-                  : (price != null ? '$' + Number(price).toFixed(2) : '&mdash;')
-                }</td>
-              </tr>`).join('')}
-          </table>
-        </div>`
-    }
+    const cards = cats.map(cat => `
+      <div class="card">
+        <div class="cat-hdr">${cat}</div>
+        <table>
+          ${grouped[cat].map(({ label, price, variations }) => `
+            <tr>
+              <td class="nm">${label}</td>
+              <td class="pr">${variations
+                ? variations.map(v => `<div class="vr"><span class="vn">${v.name}</span><span>$${Number(v.price).toFixed(2)}</span></div>`).join('')
+                : (price != null ? '$' + Number(price).toFixed(2) : '&mdash;')
+              }</td>
+            </tr>`).join('')}
+        </table>
+      </div>`).join('')
 
-    function pageHeader() {
-      return `
-      <div class="page-header">
-        <div>
-          <div class="bar-name">🍺 Paynter Bar</div>
-          <div class="bar-sub">GemLife Palmwoods &nbsp;·&nbsp; Current Prices</div>
-        </div>
+    const hdr = `
+      <div class="hdr">
+        <div><div class="title">🍺 Paynter Bar</div><div class="sub">GemLife Palmwoods &nbsp;·&nbsp; Current Prices</div></div>
         <div class="badge">Price List</div>
       </div>`
-    }
 
     const html = `<!DOCTYPE html><html><head>
 <meta charset="UTF-8">
-<title>Paynter Bar — Price List</title>
+<title>Paynter Bar Price List</title>
 <style>
   @page { size: A4 portrait; margin: 10mm; }
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  html, body { width: 190mm; font-family: Arial, Helvetica, sans-serif; background: #fff; color: #1f2937; font-size: 11px; }
+  body { font-family: Arial, sans-serif; font-size: 11px; color: #1f2937; background: #fff; width: 190mm; }
 
-  .page {
-    width: 190mm;
-    height: 277mm;
-    overflow: hidden;
-    page-break-after: always;
-    display: flex;
-    flex-direction: column;
-  }
-  .page:last-child { page-break-after: avoid; }
-
-  .page-header {
-    background: #0f172a; color: #fff;
-    border-radius: 6px; padding: 8px 14px; margin-bottom: 8px;
+  .hdr {
     display: flex; justify-content: space-between; align-items: center;
-    flex-shrink: 0;
+    background: #0f172a; color: #fff;
+    padding: 8px 14px; border-radius: 6px; margin-bottom: 8px;
   }
-  .bar-name { font-size: 18px; font-weight: 800; letter-spacing: 0.03em; }
-  .bar-sub  { font-size: 9px; color: #94a3b8; margin-top: 1px; }
-  .badge {
-    background: #f59e0b; color: #0f172a;
-    font-size: 9px; font-weight: 700;
-    padding: 3px 8px; border-radius: 99px;
-  }
+  .title  { font-size: 18px; font-weight: 800; }
+  .sub    { font-size: 9px; color: #94a3b8; margin-top: 2px; }
+  .badge  { background: #f59e0b; color: #0f172a; font-size: 9px; font-weight: 700; padding: 3px 8px; border-radius: 99px; }
 
-  /* CSS columns — flows naturally, no gaps */
-  .columns {
-    column-count: 2;
-    column-gap: 8px;
-    flex: 1;
-  }
+  .cols   { columns: 2; column-gap: 7px; }
 
-  .category-card {
+  .card {
     break-inside: avoid;
-    border: 1px solid #e2e8f0;
-    border-radius: 5px;
-    overflow: hidden;
-    margin-bottom: 6px;
+    border: 1px solid #e2e8f0; border-radius: 5px;
+    overflow: hidden; margin-bottom: 6px;
+    display: inline-block; width: 100%;
   }
-  .cat-header {
+  .cat-hdr {
     background: #1e3a5f; color: #fff;
-    font-size: 9px; font-weight: 700;
+    font-size: 8.5px; font-weight: 700;
     text-transform: uppercase; letter-spacing: 0.07em;
-    padding: 4px 9px;
+    padding: 4px 8px;
   }
-  .price-table { width: 100%; border-collapse: collapse; }
-  .price-table tr:nth-child(even) td { background: #f8fafc; }
-  .item-name  { padding: 3px 9px; font-size: 10.5px; color: #1f2937; }
-  .item-price {
-    padding: 3px 9px; text-align: right;
+  table { width: 100%; border-collapse: collapse; }
+  tr:nth-child(even) td { background: #f8fafc; }
+  .nm { padding: 3px 8px; font-size: 10.5px; }
+  .pr {
+    padding: 3px 8px; text-align: right;
     font-size: 11px; font-weight: 700;
     font-family: 'Courier New', monospace;
-    color: #0f172a; white-space: nowrap; width: 65px;
-    vertical-align: top;
+    white-space: nowrap; width: 62px; vertical-align: top;
   }
-  .var-row { display: flex; justify-content: space-between; gap: 4px; line-height: 1.5; }
-  .var-name { font-size: 8.5px; color: #64748b; font-weight: 400; font-family: Arial, sans-serif; }
+  .vr { display: flex; justify-content: space-between; gap: 4px; line-height: 1.5; }
+  .vn { font-size: 8px; color: #64748b; font-weight: 400; font-family: Arial; }
 
-  .page-footer {
-    flex-shrink: 0;
-    margin-top: 6px; text-align: center;
-    font-size: 8px; color: #94a3b8;
+  .ftr {
+    text-align: center; font-size: 8px; color: #94a3b8;
+    margin-top: 6px; padding-top: 4px;
+    border-top: 1px solid #f1f5f9;
   }
 
   @media print {
-    html, body { width: 100%; }
-    body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-    .page { width: 100%; height: 277mm; }
+    body { -webkit-print-color-adjust: exact; print-color-adjust: exact; width: 100%; }
+    .hdr { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .cat-hdr { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   }
 </style>
 </head><body>
-
-  <div class="page">
-    ${pageHeader()}
-    <div class="columns">
-      ${page1cats.map(renderCategoryCard).join('')}
-    </div>
-    <div class="page-footer">Prices current as of ${generated} &nbsp;·&nbsp; Page 1 of 2 &nbsp;·&nbsp; Paynter Bar, GemLife Palmwoods</div>
-  </div>
-
-  <div class="page">
-    ${pageHeader()}
-    <div class="columns">
-      ${page2cats.map(renderCategoryCard).join('')}
-    </div>
-    <div class="page-footer">Prices current as of ${generated} &nbsp;·&nbsp; Page 2 of 2 &nbsp;·&nbsp; Paynter Bar, GemLife Palmwoods</div>
-  </div>
-
+  ${hdr}
+  <div class="cols">${cards}</div>
+  <div class="ftr">Prices current as of ${generated} &nbsp;·&nbsp; Paynter Bar, GemLife Palmwoods</div>
 </body></html>`
 
     const w = window.open('', '_blank')
