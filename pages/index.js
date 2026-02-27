@@ -54,6 +54,9 @@ export default function Home() {
   const [trendLoading, setTrendLoading] = useState(false)
   const [trendError, setTrendError]     = useState(null)
   const [agmLoading, setAgmLoading]     = useState(false)
+  const [sellersData, setSellersData]   = useState(null)
+  const [sellersLoading, setSellersLoading] = useState(false)
+  const [sellersError, setSellersError] = useState(null)
   const [priceListSettings, setPriceListSettings] = useState({}) // { itemName: { hidden: bool, priceOverride: num, label: str } }
   const [plSaving, setPlSaving]         = useState({})
 
@@ -154,6 +157,31 @@ export default function Home() {
       setSalesError(e.message)
     } finally {
       setSalesLoading(false)
+    }
+  }
+
+  async function loadSellersData() {
+    if (sellersData) return   // already loaded
+    setSellersLoading(true)
+    setSellersError(null)
+    try {
+      const end   = new Date(); end.setHours(23,59,59,999)
+      const start = new Date(); start.setDate(start.getDate() - 90); start.setHours(0,0,0,0)
+      // dummy compare range (required by API but not used here)
+      const compareEnd   = new Date(start.getTime() - 1)
+      const compareStart = new Date(compareEnd); compareStart.setDate(compareStart.getDate() - 90)
+      const params = new URLSearchParams({
+        start: start.toISOString(), end: end.toISOString(),
+        compareStart: compareStart.toISOString(), compareEnd: compareEnd.toISOString(),
+      })
+      const r = await fetch(`/api/sales?${params}`)
+      if (!r.ok) throw new Error((await r.json()).error || 'Failed')
+      const data = await r.json()
+      setSellersData(data)
+    } catch(e) {
+      setSellersError(e.message)
+    } finally {
+      setSellersLoading(false)
     }
   }
 
@@ -1144,7 +1172,7 @@ ${orderItems.length === 0 ? '<p style="color:#6b7280;margin-top:16px">No items t
                   {mainTab === 'sales' ? '← Reorder' : '📊 Sales Report'}
                 </button>
                 <button style={{ ...styles.btn, background: mainTab === 'bestsellers' ? '#b45309' : '#78350f' }}
-                  onClick={() => { setMainTab(t => t === 'bestsellers' ? 'reorder' : 'bestsellers') }}>
+                  onClick={() => { const next = mainTab === 'bestsellers' ? 'reorder' : 'bestsellers'; setMainTab(next); if (next === 'bestsellers') loadSellersData() }}>
                   {mainTab === 'bestsellers' ? '← Back' : '🏆 Sellers'}
                 </button>
                 <button style={{ ...styles.btn, background: mainTab === 'pricelist' ? '#be185d' : '#9d174d' }}
@@ -1390,7 +1418,7 @@ ${orderItems.length === 0 ? '<p style="color:#6b7280;margin-top:16px">No items t
         )}
 
         {mainTab === 'trends' && <TrendsView data={trendData} loading={trendLoading} error={trendError} />}
-        {mainTab === 'bestsellers' && <BestSellersView items={items} />}
+        {mainTab === 'bestsellers' && <BestSellersView items={items} salesData={sellersData} loading={sellersLoading} error={sellersError} />}
         {mainTab === 'pricelist' && (
           <PriceListView
             items={items}
@@ -1412,44 +1440,51 @@ ${orderItems.length === 0 ? '<p style="color:#6b7280;margin-top:16px">No items t
 }
 
 // ─── BEST & WORST SELLERS VIEW ───────────────────────────────────────────────
-function BestSellersView({ items }) {
-  const STALE_DAYS = 60
-
+function BestSellersView({ items, salesData, loading, error }) {
   const today = new Date()
 
-  // Classify each item
+  // Build a map of itemName -> unitsSold from Orders API data (90 days)
+  const salesMap = {}
+  if (salesData) {
+    for (const item of salesData.items || []) {
+      salesMap[item.name] = (salesMap[item.name] || 0) + item.unitsSold
+    }
+  }
+
   const withData = items.filter(i => i.weeklyAvg != null)
-
-  // Sort by weekly average descending for best sellers
   const sorted = [...withData].sort((a, b) => (b.weeklyAvg || 0) - (a.weeklyAvg || 0))
-
   const top10 = sorted.slice(0, 10)
 
-  // Worst: items with stock but zero sales recorded in the 90 day window
-  const notSelling = withData.filter(i => {
-    if ((i.onHand || 0) <= 0) return false   // no stock, ignore
-    return (i.soldLast90 || 0) === 0          // no sales in last 90 days
-  }).sort((a, b) => (b.onHand || 0) - (a.onHand || 0))
+  // Not selling: has stock, zero sales in Orders API 90-day window
+  const notSelling = salesData
+    ? withData.filter(i => {
+        if ((i.onHand || 0) <= 0) return false
+        return (salesMap[i.name] || 0) === 0
+      }).sort((a, b) => (b.onHand || 0) - (a.onHand || 0))
+    : []
 
-  // Consistent performers: top 20% by weekly avg, sold in last 30 days
+  // Consistent stars: top 20% by weekly avg AND sold in Orders API data
   const avgThreshold = sorted[Math.floor(sorted.length * 0.2)]?.weeklyAvg || 0
   const consistent = sorted.filter(i => {
     if ((i.weeklyAvg || 0) < avgThreshold) return false
-    if (!i.lastSold) return false
-    const daysSince = Math.floor((today - new Date(i.lastSold)) / 86400000)
-    return daysSince <= 30
+    return salesData ? (salesMap[i.name] || 0) > 0 : true
   })
-
-  const daysSince = item => {
-    if (!item.lastSold) return null
-    return Math.floor((today - new Date(item.lastSold)) / 86400000)
-  }
 
   const maxAvg = top10[0]?.weeklyAvg || 1
 
   return (
     <div style={{ padding: '24px 32px', maxWidth: 1100, margin: '0 auto' }}>
 
+      {loading && (
+        <div style={{ textAlign: 'center', padding: 48, color: '#64748b' }}>
+          <div style={{ ...styles.spinner, margin: '0 auto 16px' }} />
+          Loading 90 days of sales data from Square...
+        </div>
+      )}
+      {error && <div style={styles.errorBox}><strong>Error:</strong> {error}</div>}
+      {!loading && !error && (
+
+      <>
       {/* Summary strip */}
       <div style={{ display: 'flex', gap: 12, marginBottom: 24, flexWrap: 'wrap' }}>
         {[
@@ -1516,7 +1551,7 @@ function BestSellersView({ items }) {
                         <div style={{ fontSize: 10, color: '#64748b' }}>{item.category} · {item.onHand} in stock</div>
                       </div>
                       <div style={{ textAlign: 'right' }}>
-                        <div style={{ fontSize: 12, fontWeight: 700, color: '#dc2626' }}>0 sales</div>
+                        <div style={{ fontSize: 12, fontWeight: 700, color: '#dc2626' }}>0 sold</div>
                         <div style={{ fontSize: 10, color: '#94a3b8' }}>last 90 days</div>
                       </div>
                     </div>
@@ -1558,8 +1593,10 @@ function BestSellersView({ items }) {
       </div>
 
       <div style={{ marginTop: 16, fontSize: 11, color: '#94a3b8', textAlign: 'center' }}>
-        Based on Square sales data · Weekly averages calculated from current sales period setting · Last sale date from inventory movement records
+        Based on Square Orders API · 90 day window · {salesData ? `${(salesData.items||[]).length} items analysed` : 'Loading...'}
       </div>
+      </>
+      )}
     </div>
   )
 }
