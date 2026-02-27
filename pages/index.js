@@ -1723,7 +1723,7 @@ function HelpTab() {
         { q: 'Target Weeks', a: 'Click the number in the header stats bar to change how many weeks of stock to hold. Default is 6 weeks. Affects all items\' target stock calculations.' },
         { q: 'Filtering to order items', a: 'Tick \"Order items only\" in the controls bar to hide items that don\'t need ordering — useful when preparing orders.' },
         { q: 'Supplier tabs', a: 'Click Dan Murphys, Coles Woolies or ACW to filter the table to just that supplier. Use + Supplier to add a new supplier.' },
-        { q: 'Editing item settings', a: 'Click any value in the Category, Supplier, Pack, Bottle Size or Nip Size columns to edit inline. Changes save automatically to the cloud and are shared with all committee members.' },
+        { q: 'Editing item settings', a: 'Click any value in the Category, Supplier, Pack, Bottle Size or Nip Size columns to edit inline. Changes save automatically to the cloud and are shared with all management team members.' },
         { q: 'Adding notes', a: 'Click the Notes column for any item to add a note (e.g. \"Discontinued\", \"Check price\"). Notes are saved and visible to all.' },
       ]
     },
@@ -1744,7 +1744,7 @@ function HelpTab() {
         { q: 'Enabling pricing', a: 'Click $ Pricing in the controls bar to reveal Buy Price, Sell Price and Margin % columns. This view is only available to committee members.' },
         { q: 'Sell prices from Square', a: 'Sell prices are imported automatically from your Square catalogue. Items marked \"from Square\" have been auto-populated. All price changes must be made in Square — this keeps Square as the single source of truth.' },
         { q: 'Margin calculation', a: 'Margin % = (Sell − Buy) ÷ Sell × 100. Green = 40%+, amber = 20–40%, red = below 20%. Requires both buy and sell price to be set.' },
-        { q: 'Buy prices', a: 'Click the Buy Price cell for any item and type the cost price. Saved to the cloud and shared across all committee sessions.' },
+        { q: 'Buy prices', a: 'Click the Buy Price cell for any item and type the cost price. Saved to the cloud and shared across all management team sessions.' },
       ]
     },
     {
@@ -1794,7 +1794,7 @@ function HelpTab() {
       icon: '⚙️',
       title: 'Settings & Administration',
       items: [
-        { q: 'Shared settings', a: 'All settings (categories, suppliers, pack sizes, bottle/nip sizes, prices, notes, target weeks, price list visibility) are saved to the cloud. Any committee member sees the same settings on any device.' },
+        { q: 'Shared settings', a: 'All settings (categories, suppliers, pack sizes, bottle/nip sizes, prices, notes, target weeks, price list visibility) are saved to the cloud. Any management team member sees the same settings on any device.' },
         { q: 'Adding suppliers', a: 'Use the + Supplier button in the controls bar. Assign items to suppliers by clicking the Supplier column inline.' },
         { q: 'Item categories', a: 'Available categories: Beer, Cider, PreMix, White Wine, Red Wine, Rose, Sparkling, Fortified & Liqueurs, Spirits, Soft Drinks, Snacks. Spirits and Fortified & Liqueurs items get the bottle and nip size columns.' },
         { q: 'Square POS connection', a: 'The app connects to your Square account via API. Stock levels, sales and prices update on every Refresh. Square is always the source of truth — all transactions and price changes are made in Square.' },
@@ -1824,9 +1824,9 @@ function HelpTab() {
           </div>
         </div>
         <p style={{ fontSize: 13, color: '#475569', lineHeight: 1.7, margin: 0 }}>
-          This app manages bar operations for the Paynter Bar volunteer team. It connects directly to Square POS to provide
+          This app manages bar operations for the Paynter Bar Management Team. It connects directly to Square POS to provide
           live stock levels, sales analytics, automated reorder calculations and management reports — all in one place.
-          Settings and changes made by any committee member are shared across all devices instantly.
+          Settings and changes made by any management team member are shared across all devices instantly.
         </p>
       </div>
 
