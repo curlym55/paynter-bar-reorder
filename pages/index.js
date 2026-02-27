@@ -568,7 +568,7 @@ export default function Home() {
               <tr>
                 <td class="nm">${label}</td>
                 <td class="pr">${variations
-                  ? variations.map(v => `<div class="vr"><span class="vn">${v.name}</span><span>$${Number(v.price).toFixed(2)}</span></div>`).join('')
+                  ? `<table style="border-collapse:collapse;width:100%">${variations.map(v => `<tr><td style="font-size:10px;color:#64748b;padding-right:6px;white-space:nowrap">${v.name}</td><td style="font-size:13px;font-weight:700;font-family:Courier New,monospace;text-align:right;white-space:nowrap">$${Number(v.price).toFixed(2)}</td></tr>`).join('')}</table>`
                   : (price != null ? '$' + Number(price).toFixed(2) : '&mdash;')
                 }</td>
               </tr>`).join('')}
@@ -1514,15 +1514,15 @@ function isHidden(item) {
                           const variations = getVariations(item)
                           if (variations) {
                             return (
-                              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2 }}>
+                              <table style={{ borderCollapse: 'collapse', marginLeft: 'auto' }}>
                                 {variations.map(v => (
-                                  <div key={v.name} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                                    <span style={{ fontSize: 10, color: '#64748b' }}>{v.name}</span>
-                                    <span style={{ fontSize: 13, fontWeight: 700, fontFamily: 'monospace', color: '#0f172a' }}>${Number(v.price).toFixed(2)}</span>
-                                  </div>
+                                  <tr key={v.name}>
+                                    <td style={{ fontSize: 10, color: '#64748b', paddingRight: 8, whiteSpace: 'nowrap' }}>{v.name}</td>
+                                    <td style={{ fontSize: 13, fontWeight: 700, fontFamily: 'monospace', color: '#0f172a', textAlign: 'right', whiteSpace: 'nowrap' }}>${Number(v.price).toFixed(2)}</td>
+                                  </tr>
                                 ))}
-                                <span style={{ fontSize: 9, color: '#94a3b8' }}>Square</span>
-                              </div>
+                                <tr><td colSpan={2} style={{ fontSize: 9, color: '#94a3b8', textAlign: 'right' }}>Square</td></tr>
+                              </table>
                             )
                           }
                           return (
