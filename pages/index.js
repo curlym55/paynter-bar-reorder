@@ -1949,6 +1949,25 @@ function HelpTab() {
       ]
     },
     {
+      icon: '🏆',
+      title: 'Best & Worst Sellers',
+      items: [
+        { q: 'Opening the report', a: 'Click 🏆 Sellers in the top-right header. The report fetches 90 days of Orders API data from Square — allow a few seconds to load.' },
+        { q: 'Top 10 Sellers', a: 'Ranked by weekly average from Square inventory data, with a bar chart showing relative performance. Your most reliable, high-volume items.' },
+        { q: 'Slow Sellers', a: 'The bottom 25% of items that are selling but very slowly over the last 90 days. Useful for identifying items to reduce ordering on or consider dropping from the range.' },
+        { q: 'Not Selling', a: 'Items with stock on hand but zero sales recorded in the last 90 days via Square Orders API. Strong candidates for discontinuing or running down stock.' },
+        { q: 'Data source', a: 'The right column (Slow Sellers and Not Selling) uses the Square Orders API — the same reliable source as the Sales Report. The Top 10 uses weekly averages from inventory movement data.' },
+      ]
+    },
+    {
+      icon: '👥',
+      title: 'Volunteer Roster',
+      items: [
+        { q: 'Opening the roster', a: 'Click 👥 Roster in the top-right header to open the volunteer roster app in a new tab. The roster runs independently at paynter-bar-roster.vercel.app.' },
+        { q: 'How they connect', a: 'The two apps are separate — the roster link is just a shortcut for convenience. Any changes to the roster are made within the roster app itself.' },
+      ]
+    },
+    {
       icon: '📈',
       title: 'Quarterly Trends',
       items: [
@@ -1996,7 +2015,7 @@ function HelpTab() {
       items: [
         { q: 'Committee access', a: 'Full access to all features including editing item settings, categories, suppliers, pack sizes, bottle and nip sizes, buy prices, notes, target weeks, and price list visibility toggles. Can also export the stocktake spreadsheet and add suppliers.' },
         { q: 'Homeowners committee access', a: 'Read-only access. All data is visible — stock levels, order quantities, sales reports, trends, price list and PDF reports — but nothing can be edited. A READ ONLY badge appears in the header.' },
-        { q: 'What read-only users can view', a: 'Stock on hand, weekly averages, order quantities, item status, sales reports, quarterly trends, category breakdowns, top sellers, price list, and all PDF reports including the AGM annual report.' },
+        { q: 'What read-only users can view', a: 'Stock on hand, weekly averages, order quantities, item status, sales reports, quarterly trends, best & worst sellers, category breakdowns, price list, and all PDF reports including the AGM annual report.' },
         { q: 'What read-only users cannot do', a: 'Edit any item settings, change prices, toggle price list visibility, export the stocktake spreadsheet, add suppliers, or change target weeks.' },
         { q: 'Pricing visibility', a: 'Buy prices and the $ Pricing view are only visible to committee members — hidden entirely for read-only users to keep cost prices confidential.' },
       ]
@@ -2015,7 +2034,7 @@ function HelpTab() {
         </div>
         <p style={{ fontSize: 13, color: '#475569', lineHeight: 1.7, margin: 0 }}>
           This app manages bar operations for the Paynter Bar Management Team. It connects directly to Square POS to provide
-          live stock levels, sales analytics, automated reorder calculations and management reports — all in one place.
+          live stock levels, sales analytics, automated reorder calculations, seller performance reports and management reports — all in one place.
           Settings and changes made by any management team member are shared across all devices instantly.
         </p>
       </div>
