@@ -1121,7 +1121,7 @@ ${orderItems.length === 0 ? '<p style="color:#6b7280;margin-top:16px">No items t
                 {readOnly && <span style={{ fontSize: 10, background: '#fef9c3', color: '#854d0e', border: '1px solid #fde68a', borderRadius: 4, padding: '2px 7px', fontWeight: 700, letterSpacing: '0.05em' }}>READ ONLY</span>}
                 <span style={styles.logoSub}>GemLife Palmwoods</span>
               </div>
-              <h1 style={styles.title}>{mainTab === 'sales' ? 'Sales Report' : mainTab === 'trends' ? 'Quarterly Trends' : mainTab === 'help' ? 'Help & Guide' : mainTab === 'pricelist' ? 'Price List' : 'Reorder Planner'}</h1>
+              <h1 style={styles.title}>{mainTab === 'sales' ? 'Sales Report' : mainTab === 'trends' ? 'Quarterly Trends' : mainTab === 'help' ? 'Help & Guide' : mainTab === 'pricelist' ? 'Price List' : mainTab === 'bestsellers' ? 'Best & Worst Sellers' : 'Reorder Planner'}</h1>
             </div>
             <div style={styles.headerRight}>
               {lastUpdated && <span style={styles.lastUpdated}>Updated {new Date(lastUpdated).toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit' })}</span>}
@@ -1143,9 +1143,17 @@ ${orderItems.length === 0 ? '<p style="color:#6b7280;margin-top:16px">No items t
                   }}>
                   {mainTab === 'sales' ? '← Reorder' : '📊 Sales Report'}
                 </button>
+                <button style={{ ...styles.btn, background: mainTab === 'bestsellers' ? '#b45309' : '#78350f' }}
+                  onClick={() => { setMainTab(t => t === 'bestsellers' ? 'reorder' : 'bestsellers') }}>
+                  {mainTab === 'bestsellers' ? '← Back' : '🏆 Sellers'}
+                </button>
                 <button style={{ ...styles.btn, background: mainTab === 'pricelist' ? '#be185d' : '#9d174d' }}
                   onClick={() => { setMainTab(t => t === 'pricelist' ? 'reorder' : 'pricelist') }}>
                   {mainTab === 'pricelist' ? '← Back' : '🏷️ Price List'}
+                </button>
+                <button style={{ ...styles.btn, background: '#0f766e' }}
+                  onClick={() => window.open('https://paynter-bar-roster.vercel.app/', '_blank')}>
+                  👥 Roster
                 </button>
                 <button style={{ ...styles.btn, background: mainTab === 'help' ? '#1e293b' : '#475569' }}
                   onClick={() => setMainTab(t => t === 'help' ? 'reorder' : 'help')}>
@@ -1382,6 +1390,7 @@ ${orderItems.length === 0 ? '<p style="color:#6b7280;margin-top:16px">No items t
         )}
 
         {mainTab === 'trends' && <TrendsView data={trendData} loading={trendLoading} error={trendError} />}
+        {mainTab === 'bestsellers' && <BestSellersView items={items} />}
         {mainTab === 'pricelist' && (
           <PriceListView
             items={items}
@@ -1401,6 +1410,166 @@ ${orderItems.length === 0 ? '<p style="color:#6b7280;margin-top:16px">No items t
     </>
   )
 }
+
+// ─── BEST & WORST SELLERS VIEW ───────────────────────────────────────────────
+function BestSellersView({ items }) {
+  const STALE_DAYS = 60
+
+  const today = new Date()
+
+  // Classify each item
+  const withData = items.filter(i => i.weeklyAvg != null)
+
+  // Sort by weekly average descending for best sellers
+  const sorted = [...withData].sort((a, b) => (b.weeklyAvg || 0) - (a.weeklyAvg || 0))
+
+  const top10 = sorted.slice(0, 10)
+
+  // Worst: items with stock but not sold in 60+ days
+  const notSelling = withData.filter(i => {
+    if ((i.onHand || 0) <= 0) return false  // no stock, ignore
+    if (!i.lastSold) return true            // never sold
+    const daysSince = Math.floor((today - new Date(i.lastSold)) / (1000 * 60 * 60 * 24))
+    return daysSince >= STALE_DAYS
+  }).sort((a, b) => {
+    const dA = a.lastSold ? Math.floor((today - new Date(a.lastSold)) / 86400000) : 9999
+    const dB = b.lastSold ? Math.floor((today - new Date(b.lastSold)) / 86400000) : 9999
+    return dB - dA
+  })
+
+  // Consistent performers: top 20% by weekly avg, sold in last 30 days
+  const avgThreshold = sorted[Math.floor(sorted.length * 0.2)]?.weeklyAvg || 0
+  const consistent = sorted.filter(i => {
+    if ((i.weeklyAvg || 0) < avgThreshold) return false
+    if (!i.lastSold) return false
+    const daysSince = Math.floor((today - new Date(i.lastSold)) / 86400000)
+    return daysSince <= 30
+  })
+
+  const daysSince = item => {
+    if (!item.lastSold) return null
+    return Math.floor((today - new Date(item.lastSold)) / 86400000)
+  }
+
+  const maxAvg = top10[0]?.weeklyAvg || 1
+
+  return (
+    <div style={{ padding: '24px 32px', maxWidth: 1100, margin: '0 auto' }}>
+
+      {/* Summary strip */}
+      <div style={{ display: 'flex', gap: 12, marginBottom: 24, flexWrap: 'wrap' }}>
+        {[
+          { label: 'Top Seller', value: top10[0]?.name.split(' ').slice(0,3).join(' ') || '—', sub: top10[0] ? `${top10[0].weeklyAvg} / week` : '', color: '#16a34a' },
+          { label: 'Items Tracked', value: withData.length, sub: `${items.length} total`, color: '#2563eb' },
+          { label: 'Not Selling', value: notSelling.length, sub: `${STALE_DAYS}+ days with stock`, color: '#dc2626' },
+          { label: 'Consistent Stars', value: consistent.length, sub: 'top 20% + sold recently', color: '#d97706' },
+        ].map(({ label, value, sub, color }) => (
+          <div key={label} style={{ background: '#fff', borderRadius: 10, border: '1px solid #e2e8f0', padding: '12px 18px', flex: 1, minWidth: 150 }}>
+            <div style={{ fontSize: 10, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 4 }}>{label}</div>
+            <div style={{ fontSize: 22, fontWeight: 700, color, fontFamily: 'IBM Plex Mono, monospace' }}>{value}</div>
+            <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 2 }}>{sub}</div>
+          </div>
+        ))}
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
+
+        {/* Top 10 sellers */}
+        <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #e2e8f0', overflow: 'hidden' }}>
+          <div style={{ background: '#14532d', color: '#fff', padding: '10px 16px', fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.07em' }}>
+            🏆 Top 10 Sellers — Weekly Average
+          </div>
+          <div>
+            {top10.map((item, idx) => {
+              const barPct = Math.round((item.weeklyAvg / maxAvg) * 100)
+              return (
+                <div key={item.name} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 14px', borderBottom: idx < 9 ? '1px solid #f1f5f9' : 'none', background: idx % 2 === 0 ? '#fff' : '#f8fafc' }}>
+                  <span style={{ fontSize: 11, color: '#94a3b8', width: 18, textAlign: 'right', flexShrink: 0 }}>{idx + 1}</span>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 12, fontWeight: 600, color: '#0f172a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.name}</div>
+                    <div style={{ marginTop: 3, height: 6, background: '#e2e8f0', borderRadius: 3, overflow: 'hidden' }}>
+                      <div style={{ width: `${barPct}%`, height: '100%', background: '#16a34a', borderRadius: 3 }} />
+                    </div>
+                  </div>
+                  <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                    <span style={{ fontSize: 13, fontWeight: 700, fontFamily: 'monospace', color: '#0f172a' }}>{item.weeklyAvg}</span>
+                    <span style={{ fontSize: 10, color: '#94a3b8', marginLeft: 3 }}>/wk</span>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+
+        {/* Right column */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+
+          {/* Not selling */}
+          <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #e2e8f0', overflow: 'hidden' }}>
+            <div style={{ background: '#7f1d1d', color: '#fff', padding: '10px 16px', fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.07em' }}>
+              ⚠️ Not Selling — {STALE_DAYS}+ Days With Stock
+            </div>
+            {notSelling.length === 0 ? (
+              <div style={{ padding: '16px', fontSize: 12, color: '#64748b', textAlign: 'center' }}>No items — everything is selling! ✓</div>
+            ) : (
+              <div>
+                {notSelling.map((item, idx) => {
+                  const days = daysSince(item)
+                  return (
+                    <div key={item.name} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '7px 14px', borderBottom: idx < notSelling.length - 1 ? '1px solid #f1f5f9' : 'none', background: idx % 2 === 0 ? '#fff' : '#fef2f2' }}>
+                      <div>
+                        <div style={{ fontSize: 12, fontWeight: 600, color: '#0f172a' }}>{item.name}</div>
+                        <div style={{ fontSize: 10, color: '#64748b' }}>{item.category} · {item.onHand} in stock</div>
+                      </div>
+                      <div style={{ textAlign: 'right' }}>
+                        <div style={{ fontSize: 12, fontWeight: 700, color: '#dc2626' }}>{days === null ? 'Never sold' : `${days} days`}</div>
+                        <div style={{ fontSize: 10, color: '#94a3b8' }}>since last sale</div>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Consistent stars */}
+          <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #e2e8f0', overflow: 'hidden' }}>
+            <div style={{ background: '#78350f', color: '#fff', padding: '10px 16px', fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.07em' }}>
+              ⭐ Consistent Stars — Top 20% Selling Regularly
+            </div>
+            {consistent.length === 0 ? (
+              <div style={{ padding: '16px', fontSize: 12, color: '#64748b', textAlign: 'center' }}>No data available yet</div>
+            ) : (
+              <div>
+                {consistent.map((item, idx) => {
+                  const days = daysSince(item)
+                  return (
+                    <div key={item.name} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '7px 14px', borderBottom: idx < consistent.length - 1 ? '1px solid #f1f5f9' : 'none', background: idx % 2 === 0 ? '#fff' : '#fffbeb' }}>
+                      <div>
+                        <div style={{ fontSize: 12, fontWeight: 600, color: '#0f172a' }}>{item.name}</div>
+                        <div style={{ fontSize: 10, color: '#64748b' }}>{item.category}</div>
+                      </div>
+                      <div style={{ textAlign: 'right' }}>
+                        <div style={{ fontSize: 13, fontWeight: 700, fontFamily: 'monospace', color: '#d97706' }}>{item.weeklyAvg}<span style={{ fontSize: 10, color: '#94a3b8', fontWeight: 400, marginLeft: 3 }}>/wk</span></div>
+                        <div style={{ fontSize: 10, color: '#94a3b8' }}>sold {days} days ago</div>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+
+        </div>
+      </div>
+
+      <div style={{ marginTop: 16, fontSize: 11, color: '#94a3b8', textAlign: 'center' }}>
+        Based on Square sales data · Weekly averages calculated from current sales period setting · Last sale date from inventory movement records
+      </div>
+    </div>
+  )
+}
+
 
 // ─── PRICE LIST VIEW ──────────────────────────────────────────────────────────
 function PriceListView({ items, settings, readOnly, saving, onSave, onPrint }) {
