@@ -580,106 +580,95 @@ export default function Home() {
 <meta charset="UTF-8">
 <title>Paynter Bar — Price List</title>
 <style>
-  @page { size: A4 portrait; margin: 12mm 12mm 10mm; }
+  @page { size: A4 portrait; margin: 10mm; }
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body {
-    font-family: Arial, Helvetica, sans-serif;
-    background: #fff; color: #1f2937;
-    font-size: 12px;
-  }
+  html, body { width: 190mm; font-family: Arial, Helvetica, sans-serif; background: #fff; color: #1f2937; font-size: 11px; }
+
   .page {
-    width: 186mm;
-    min-height: 273mm;
+    width: 190mm;
+    height: 277mm;
+    overflow: hidden;
+    page-break-after: always;
     display: flex;
     flex-direction: column;
-    page-break-after: always;
   }
   .page:last-child { page-break-after: avoid; }
 
-  /* Header */
   .page-header {
     background: #0f172a; color: #fff;
-    border-radius: 8px; padding: 10px 16px; margin-bottom: 10px;
+    border-radius: 6px; padding: 8px 14px; margin-bottom: 8px;
     display: flex; justify-content: space-between; align-items: center;
+    flex-shrink: 0;
   }
-  .bar-name { font-size: 20px; font-weight: 800; letter-spacing: 0.03em; }
-  .bar-sub  { font-size: 10px; color: #94a3b8; margin-top: 2px; }
+  .bar-name { font-size: 18px; font-weight: 800; letter-spacing: 0.03em; }
+  .bar-sub  { font-size: 9px; color: #94a3b8; margin-top: 1px; }
   .badge {
     background: #f59e0b; color: #0f172a;
-    font-size: 10px; font-weight: 700;
-    padding: 3px 10px; border-radius: 99px;
+    font-size: 9px; font-weight: 700;
+    padding: 3px 8px; border-radius: 99px;
   }
 
-  /* Two-column grid */
-  .grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 8px;
+  /* CSS columns — flows naturally, no gaps */
+  .columns {
+    column-count: 2;
+    column-gap: 8px;
     flex: 1;
-    align-content: start;
   }
 
-  /* Category cards */
   .category-card {
-    border: 1px solid #e2e8f0;
-    border-radius: 6px;
-    overflow: hidden;
     break-inside: avoid;
+    border: 1px solid #e2e8f0;
+    border-radius: 5px;
+    overflow: hidden;
+    margin-bottom: 6px;
   }
   .cat-header {
     background: #1e3a5f; color: #fff;
-    font-size: 9.5px; font-weight: 700;
+    font-size: 9px; font-weight: 700;
     text-transform: uppercase; letter-spacing: 0.07em;
-    padding: 5px 10px;
+    padding: 4px 9px;
   }
-
-  /* Price table */
   .price-table { width: 100%; border-collapse: collapse; }
   .price-table tr:nth-child(even) td { background: #f8fafc; }
-  .item-name  { padding: 4px 10px; font-size: 11px; color: #1f2937; }
+  .item-name  { padding: 3px 9px; font-size: 10.5px; color: #1f2937; }
   .item-price {
-    padding: 4px 10px; text-align: right;
-    font-size: 12px; font-weight: 700;
+    padding: 3px 9px; text-align: right;
+    font-size: 11px; font-weight: 700;
     font-family: 'Courier New', monospace;
-    color: #0f172a; white-space: nowrap; width: 70px;
+    color: #0f172a; white-space: nowrap; width: 65px;
     vertical-align: top;
   }
-  .var-row {
-    display: flex; justify-content: space-between;
-    gap: 6px; line-height: 1.5;
-  }
-  .var-name {
-    font-size: 9px; color: #64748b; font-weight: 400;
-    font-family: Arial, sans-serif;
-  }
+  .var-row { display: flex; justify-content: space-between; gap: 4px; line-height: 1.5; }
+  .var-name { font-size: 8.5px; color: #64748b; font-weight: 400; font-family: Arial, sans-serif; }
 
-  /* Footer */
   .page-footer {
-    margin-top: 8px; text-align: center;
-    font-size: 8.5px; color: #94a3b8; letter-spacing: 0.03em;
+    flex-shrink: 0;
+    margin-top: 6px; text-align: center;
+    font-size: 8px; color: #94a3b8;
   }
 
   @media print {
+    html, body { width: 100%; }
     body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-    .page { width: 100%; min-height: auto; }
+    .page { width: 100%; height: 277mm; }
   }
 </style>
 </head><body>
 
   <div class="page">
     ${pageHeader()}
-    <div class="grid">
+    <div class="columns">
       ${page1cats.map(renderCategoryCard).join('')}
     </div>
-    <div class="page-footer">Prices current as of ${generated} &nbsp;|&nbsp; Page 1 of 2 &nbsp;|&nbsp; Paynter Bar, GemLife Palmwoods</div>
+    <div class="page-footer">Prices current as of ${generated} &nbsp;·&nbsp; Page 1 of 2 &nbsp;·&nbsp; Paynter Bar, GemLife Palmwoods</div>
   </div>
 
   <div class="page">
     ${pageHeader()}
-    <div class="grid">
+    <div class="columns">
       ${page2cats.map(renderCategoryCard).join('')}
     </div>
-    <div class="page-footer">Prices current as of ${generated} &nbsp;|&nbsp; Page 2 of 2 &nbsp;|&nbsp; Paynter Bar, GemLife Palmwoods</div>
+    <div class="page-footer">Prices current as of ${generated} &nbsp;·&nbsp; Page 2 of 2 &nbsp;·&nbsp; Paynter Bar, GemLife Palmwoods</div>
   </div>
 
 </body></html>`
