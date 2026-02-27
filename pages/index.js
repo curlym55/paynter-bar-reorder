@@ -536,21 +536,6 @@ export default function Home() {
 
     const cats = CATEGORY_ORDER.filter(c => grouped[c])
 
-    const cards = cats.map(cat => `
-      <div class="card">
-        <div class="cat-hdr">${cat}</div>
-        <table>
-          ${grouped[cat].map(({ label, price, variations }) => `
-            <tr>
-              <td class="nm">${label}</td>
-              <td class="pr">${variations
-                ? variations.map(v => `<div class="vr"><span class="vn">${v.name}</span><span>$${Number(v.price).toFixed(2)}</span></div>`).join('')
-                : (price != null ? '$' + Number(price).toFixed(2) : '&mdash;')
-              }</td>
-            </tr>`).join('')}
-        </table>
-      </div>`).join('')
-
     // Split categories into two balanced halves by item row count
     const itemCount = cat => grouped[cat].reduce((s, i) => s + (i.variations ? i.variations.length : 1), 0)
     const totalRows = cats.reduce((s, c) => s + itemCount(c), 0)
