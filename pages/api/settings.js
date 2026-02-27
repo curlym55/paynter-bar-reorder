@@ -3,6 +3,12 @@ import { kvGet, kvSet } from '../../lib/redis'
 export default async function handler(req, res) {
   if (req.method === 'GET') {
     try {
+      // Price list settings endpoint
+      if (req.query.action === 'getPriceList') {
+        const priceList = (await kvGet('priceListSettings')) || {}
+        return res.status(200).json({ priceList })
+      }
+
       const settings     = (await kvGet('itemSettings')) || {}
       const targetWeeks  = (await kvGet('targetWeeks'))  || 6
       const suppliers    = (await kvGet('suppliers'))    || ['Dan Murphys', 'Coles Woolies', 'ACW']
@@ -12,8 +18,24 @@ export default async function handler(req, res) {
     }
   } else if (req.method === 'POST') {
     try {
-      const { itemName, field, value } = req.body
-      if (!itemName || !field) return res.status(400).json({ error: 'itemName and field required' })
+      const { action, itemName, name, field, value } = req.body
+
+      // Price list item setting
+      if (action === 'setItem' && name && name.startsWith('__pl_')) {
+        const realName = name.replace('__pl_', '')
+        const allPl = (await kvGet('priceListSettings')) || {}
+        if (!allPl[realName]) allPl[realName] = {}
+        if (value === null || value === '') {
+          delete allPl[realName][field]
+        } else {
+          allPl[realName][field] = value
+        }
+        await kvSet('priceListSettings', allPl)
+        return res.status(200).json({ ok: true })
+      }
+
+      if (!itemName && !name) return res.status(400).json({ error: 'itemName and field required' })
+      const resolvedName = itemName || name
 
       if (field === 'targetWeeks') {
         await kvSet('targetWeeks', Number(value))
@@ -26,13 +48,13 @@ export default async function handler(req, res) {
       }
 
       const allSettings = (await kvGet('itemSettings')) || {}
-      if (!allSettings[itemName]) allSettings[itemName] = {}
+      if (!allSettings[resolvedName]) allSettings[resolvedName] = {}
 
       const numFields = ['pack', 'bottleML', 'nipML', 'stockOverride']
       if (value === null || value === '') {
-        delete allSettings[itemName][field]
+        delete allSettings[resolvedName][field]
       } else {
-        allSettings[itemName][field] = numFields.includes(field) ? Number(value) : value
+        allSettings[resolvedName][field] = numFields.includes(field) ? Number(value) : value
       }
 
       await kvSet('itemSettings', allSettings)
