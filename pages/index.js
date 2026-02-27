@@ -550,6 +550,34 @@ export default function Home() {
         </table>
       </div>`).join('')
 
+    // Split categories into two balanced halves by item row count
+    const itemCount = cat => grouped[cat].reduce((s, i) => s + (i.variations ? i.variations.length : 1), 0)
+    const totalRows = cats.reduce((s, c) => s + itemCount(c), 0)
+    let running = 0, splitAt = Math.ceil(cats.length / 2)
+    for (let i = 0; i < cats.length; i++) {
+      running += itemCount(cats[i])
+      if (running >= totalRows / 2) { splitAt = i + 1; break }
+    }
+    const page1cats = cats.slice(0, splitAt)
+    const page2cats = cats.slice(splitAt)
+
+    function renderCards(pageCats) {
+      return pageCats.map(cat => `
+        <div class="card">
+          <div class="cat-hdr">${cat}</div>
+          <table>
+            ${grouped[cat].map(({ label, price, variations }) => `
+              <tr>
+                <td class="nm">${label}</td>
+                <td class="pr">${variations
+                  ? variations.map(v => `<div class="vr"><span class="vn">${v.name}</span><span>$${Number(v.price).toFixed(2)}</span></div>`).join('')
+                  : (price != null ? '$' + Number(price).toFixed(2) : '&mdash;')
+                }</td>
+              </tr>`).join('')}
+          </table>
+        </div>`).join('')
+    }
+
     const hdr = `
       <div class="hdr">
         <div><div class="title">🍺 Paynter Bar</div><div class="sub">GemLife Palmwoods &nbsp;·&nbsp; Current Prices</div></div>
@@ -562,59 +590,71 @@ export default function Home() {
 <style>
   @page { size: A4 portrait; margin: 10mm; }
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: Arial, sans-serif; font-size: 11px; color: #1f2937; background: #fff; width: 190mm; }
+  body { font-family: Arial, sans-serif; font-size: 12px; color: #1f2937; background: #fff; }
 
   .hdr {
     display: flex; justify-content: space-between; align-items: center;
     background: #0f172a; color: #fff;
-    padding: 8px 14px; border-radius: 6px; margin-bottom: 8px;
+    padding: 10px 16px; border-radius: 6px; margin-bottom: 10px;
   }
-  .title  { font-size: 18px; font-weight: 800; }
-  .sub    { font-size: 9px; color: #94a3b8; margin-top: 2px; }
-  .badge  { background: #f59e0b; color: #0f172a; font-size: 9px; font-weight: 700; padding: 3px 8px; border-radius: 99px; }
+  .title  { font-size: 20px; font-weight: 800; }
+  .sub    { font-size: 10px; color: #94a3b8; margin-top: 2px; }
+  .badge  { background: #f59e0b; color: #0f172a; font-size: 10px; font-weight: 700; padding: 3px 10px; border-radius: 99px; }
 
-  .cols   { columns: 2; column-gap: 7px; }
+  .cols { columns: 2; column-gap: 10px; }
 
   .card {
     break-inside: avoid;
     border: 1px solid #e2e8f0; border-radius: 5px;
-    overflow: hidden; margin-bottom: 6px;
+    overflow: hidden; margin-bottom: 8px;
     display: inline-block; width: 100%;
   }
   .cat-hdr {
     background: #1e3a5f; color: #fff;
-    font-size: 8.5px; font-weight: 700;
+    font-size: 9.5px; font-weight: 700;
     text-transform: uppercase; letter-spacing: 0.07em;
-    padding: 4px 8px;
+    padding: 5px 10px;
   }
   table { width: 100%; border-collapse: collapse; }
   tr:nth-child(even) td { background: #f8fafc; }
-  .nm { padding: 3px 8px; font-size: 10.5px; }
+  .nm { padding: 4px 10px; font-size: 12px; }
   .pr {
-    padding: 3px 8px; text-align: right;
-    font-size: 11px; font-weight: 700;
+    padding: 4px 10px; text-align: right;
+    font-size: 13px; font-weight: 700;
     font-family: 'Courier New', monospace;
-    white-space: nowrap; width: 62px; vertical-align: top;
+    white-space: nowrap; width: 68px; vertical-align: top;
   }
-  .vr { display: flex; justify-content: space-between; gap: 4px; line-height: 1.5; }
-  .vn { font-size: 8px; color: #64748b; font-weight: 400; font-family: Arial; }
+  .vr { display: flex; justify-content: space-between; gap: 4px; line-height: 1.6; }
+  .vn { font-size: 9px; color: #64748b; font-weight: 400; font-family: Arial; }
+
+  .page-break {
+    page-break-before: always;
+    padding-top: 0;
+  }
 
   .ftr {
-    text-align: center; font-size: 8px; color: #94a3b8;
-    margin-top: 6px; padding-top: 4px;
+    text-align: center; font-size: 8.5px; color: #94a3b8;
+    margin-top: 8px; padding-top: 4px;
     border-top: 1px solid #f1f5f9;
   }
 
   @media print {
-    body { -webkit-print-color-adjust: exact; print-color-adjust: exact; width: 100%; }
-    .hdr { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-    .cat-hdr { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .hdr, .cat-hdr { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   }
 </style>
 </head><body>
+
   ${hdr}
-  <div class="cols">${cards}</div>
-  <div class="ftr">Prices current as of ${generated} &nbsp;·&nbsp; Paynter Bar, GemLife Palmwoods</div>
+  <div class="cols">${renderCards(page1cats)}</div>
+  <div class="ftr">Page 1 of 2 &nbsp;·&nbsp; Prices current as of ${generated} &nbsp;·&nbsp; Paynter Bar, GemLife Palmwoods</div>
+
+  <div class="page-break">
+    ${hdr}
+    <div class="cols">${renderCards(page2cats)}</div>
+    <div class="ftr">Page 2 of 2 &nbsp;·&nbsp; Prices current as of ${generated} &nbsp;·&nbsp; Paynter Bar, GemLife Palmwoods</div>
+  </div>
+
 </body></html>`
 
     const w = window.open('', '_blank')
