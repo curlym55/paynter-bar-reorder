@@ -529,9 +529,21 @@ export default function Home() {
       const cat = item.category || 'Other'
       const price = item.sellPrice != null ? item.sellPrice : item.squareSellPrice
       const label = pl.label || item.name
-      const variations = (item.variations || []).filter(v => v.price != null)
+      const rawVars = (item.variations || []).filter(v => v.price != null)
+      let variations = null
+      if (rawVars.length > 1) {
+        variations = rawVars
+          .map(v => {
+            const n = v.name.toLowerCase()
+            const name = n.includes('glass') || n.includes('wine glass') ? 'Glass'
+                       : n.includes('bottle') || n === 'regular' ? 'Bottle'
+                       : v.name
+            return { ...v, name }
+          })
+          .sort((a, b) => a.name === 'Glass' ? -1 : b.name === 'Glass' ? 1 : 0)
+      }
       if (!grouped[cat]) grouped[cat] = []
-      grouped[cat].push({ label, price, variations: variations.length > 1 ? variations : null })
+      grouped[cat].push({ label, price, variations })
     }
 
     const cats = CATEGORY_ORDER.filter(c => grouped[c])
@@ -1403,6 +1415,24 @@ function PriceListView({ items, settings, readOnly, saving, onSave, onPrint }) {
   }
   const cats = CATEGORY_ORDER.filter(c => grouped[c])
 
+
+  // Normalise Square variation names for display and sort Glass before Bottle
+  function normaliseVariations(vars) {
+    return vars
+      .map(v => {
+        const n = v.name.toLowerCase()
+        const label = n.includes('glass') || n.includes('wine glass') ? 'Glass'
+                    : n.includes('bottle') || n === 'regular' ? 'Bottle'
+                    : v.name
+        return { ...v, name: label }
+      })
+      .sort((a, b) => {
+        if (a.name === 'Glass') return -1
+        if (b.name === 'Glass') return 1
+        return 0
+      })
+  }
+
   function getPrice(item) {
     if (item.sellPrice != null)       return item.sellPrice
     if (item.squareSellPrice != null) return item.squareSellPrice
@@ -1410,9 +1440,8 @@ function PriceListView({ items, settings, readOnly, saving, onSave, onPrint }) {
   }
 
   function getVariations(item) {
-    // If item has multiple named variations (e.g. Glass + Bottle), return them
     const vars = (item.variations || []).filter(v => v.price != null)
-    if (vars.length > 1) return vars
+    if (vars.length > 1) return normaliseVariations(vars)
     return null
   }
 
