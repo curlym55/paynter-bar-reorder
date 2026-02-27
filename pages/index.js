@@ -54,6 +54,8 @@ export default function Home() {
   const [trendLoading, setTrendLoading] = useState(false)
   const [trendError, setTrendError]     = useState(null)
   const [agmLoading, setAgmLoading]     = useState(false)
+  const [priceListSettings, setPriceListSettings] = useState({}) // { itemName: { hidden: bool, priceOverride: num, label: str } }
+  const [plSaving, setPlSaving]         = useState({})
 
   useEffect(() => {
     if (sessionStorage.getItem('bar_authed') === 'yes') {
@@ -478,6 +480,158 @@ export default function Home() {
     w.document.close()
     w.focus()
     setTimeout(() => w.print(), 800)
+  }
+
+
+  // ── PRICE LIST SETTINGS ───────────────────────────────────────────────────
+  async function savePriceListSetting(itemName, field, value) {
+    const key = `${itemName}_${field}`
+    setPlSaving(s => ({ ...s, [key]: true }))
+    try {
+      const current = priceListSettings[itemName] || {}
+      const updated = { ...priceListSettings, [itemName]: { ...current, [field]: value } }
+      setPriceListSettings(updated)
+      await fetch('/api/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'setItem', name: `__pl_${itemName}`, field, value })
+      })
+    } finally {
+      setPlSaving(s => ({ ...s, [key]: false }))
+    }
+  }
+
+  // Load price list settings on mount alongside items
+  useEffect(() => {
+    async function loadPriceListSettings() {
+      try {
+        const r = await fetch('/api/settings?action=getPriceList')
+        if (r.ok) {
+          const d = await r.json()
+          setPriceListSettings(d.priceList || {})
+        }
+      } catch(e) { /* silent */ }
+    }
+    if (authed) loadPriceListSettings()
+  }, [authed])
+
+  // ── GENERATE PRICE LIST PDF ───────────────────────────────────────────────
+  function generatePriceListPDF(items, settings) {
+    const CATEGORY_ORDER = ['Beer','Cider','PreMix','White Wine','Red Wine','Rose','Sparkling','Fortified & Liqueurs','Spirits','Soft Drinks','Snacks']
+    const generated = new Date().toLocaleDateString('en-AU', { day: '2-digit', month: 'long', year: 'numeric' })
+
+    // Group visible items by category
+    const grouped = {}
+    for (const item of items) {
+      const pl   = settings[item.name] || {}
+      if (pl.hidden) continue
+      const cat  = item.category || 'Other'
+      const price = item.sellPrice != null ? item.sellPrice : item.squareSellPrice
+      const label = pl.label || item.name
+      if (!grouped[cat]) grouped[cat] = []
+      grouped[cat].push({ label, price })
+    }
+
+    // Split into two pages by categories
+    const cats = CATEGORY_ORDER.filter(c => grouped[c])
+    const half = Math.ceil(cats.length / 2)
+    const page1cats = cats.slice(0, half)
+    const page2cats = cats.slice(half)
+
+    function renderPage(pageCats, pageNum) {
+      return pageCats.map(cat => `
+        <div class="category-card">
+          <div class="cat-header">${cat}</div>
+          <table class="price-table">
+            ${grouped[cat].map(({ label, price }) => `
+              <tr>
+                <td class="item-name">${label}</td>
+                <td class="item-price">${price != null ? '$' + Number(price).toFixed(2) : '—'}</td>
+              </tr>`).join('')}
+          </table>
+        </div>`).join('')
+    }
+
+    const html = `<!DOCTYPE html><html><head><title>Paynter Bar Price List</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: Arial, sans-serif; background: #fff; color: #1f2937; }
+  .page {
+    width: 210mm; min-height: 297mm; padding: 14mm 14mm 10mm;
+    page-break-after: always;
+    display: flex; flex-direction: column;
+  }
+  .page:last-child { page-break-after: avoid; }
+  .page-header {
+    background: #0f172a; color: #fff; border-radius: 10px;
+    padding: 14px 20px; margin-bottom: 14px;
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .page-header h1 { font-size: 22px; font-weight: 800; letter-spacing: 0.04em; }
+  .page-header .sub { font-size: 11px; color: #94a3b8; margin-top: 3px; }
+  .page-header .badge {
+    background: #f59e0b; color: #0f172a; font-size: 11px;
+    font-weight: 700; padding: 4px 12px; border-radius: 99px;
+  }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; flex: 1; }
+  .category-card {
+    border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden;
+    break-inside: avoid;
+  }
+  .cat-header {
+    background: #1e3a5f; color: #fff; font-size: 11px; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.08em;
+    padding: 7px 12px;
+  }
+  .price-table { width: 100%; border-collapse: collapse; }
+  .price-table tr:nth-child(even) { background: #f8fafc; }
+  .item-name { padding: 5px 12px; font-size: 12px; color: #1f2937; }
+  .item-price {
+    padding: 5px 12px; text-align: right; font-size: 13px;
+    font-weight: 700; font-family: monospace; color: #0f172a;
+    white-space: nowrap; width: 60px;
+  }
+  .page-footer {
+    margin-top: 12px; text-align: center;
+    font-size: 9px; color: #94a3b8;
+  }
+  @media print {
+    body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .page { margin: 0; }
+  }
+</style></head><body>
+
+  <div class="page">
+    <div class="page-header">
+      <div>
+        <h1>🍺 Paynter Bar</h1>
+        <div class="sub">GemLife Palmwoods &nbsp;|&nbsp; Current Prices</div>
+      </div>
+      <div class="badge">Price List</div>
+    </div>
+    <div class="grid">${renderPage(page1cats, 1)}</div>
+    <div class="page-footer">Prices current as of ${generated} &nbsp;|&nbsp; Page 1</div>
+  </div>
+
+  <div class="page">
+    <div class="page-header">
+      <div>
+        <h1>🍺 Paynter Bar</h1>
+        <div class="sub">GemLife Palmwoods &nbsp;|&nbsp; Current Prices</div>
+      </div>
+      <div class="badge">Price List</div>
+    </div>
+    <div class="grid">${renderPage(page2cats, 2)}</div>
+    <div class="page-footer">Prices current as of ${generated} &nbsp;|&nbsp; Page 2</div>
+  </div>
+
+</body></html>`
+
+    const w = window.open('', '_blank')
+    w.document.write(html)
+    w.document.close()
+    w.focus()
+    setTimeout(() => w.print(), 600)
   }
 
   function generateStockReport() {
@@ -942,7 +1096,7 @@ ${orderItems.length === 0 ? '<p style="color:#6b7280;margin-top:16px">No items t
                 {readOnly && <span style={{ fontSize: 10, background: '#fef9c3', color: '#854d0e', border: '1px solid #fde68a', borderRadius: 4, padding: '2px 7px', fontWeight: 700, letterSpacing: '0.05em' }}>READ ONLY</span>}
                 <span style={styles.logoSub}>GemLife Palmwoods</span>
               </div>
-              <h1 style={styles.title}>{mainTab === 'sales' ? 'Sales Report' : mainTab === 'trends' ? 'Quarterly Trends' : mainTab === 'help' ? 'Help & Guide' : 'Reorder Planner'}</h1>
+              <h1 style={styles.title}>{mainTab === 'sales' ? 'Sales Report' : mainTab === 'trends' ? 'Quarterly Trends' : mainTab === 'help' ? 'Help & Guide' : mainTab === 'pricelist' ? 'Price List' : 'Reorder Planner'}</h1>
             </div>
             <div style={styles.headerRight}>
               {lastUpdated && <span style={styles.lastUpdated}>Updated {new Date(lastUpdated).toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit' })}</span>}
@@ -963,6 +1117,10 @@ ${orderItems.length === 0 ? '<p style="color:#6b7280;margin-top:16px">No items t
                     if (next === 'sales' && !salesReport) loadSalesReport(salesPeriod, salesCustom)
                   }}>
                   {mainTab === 'sales' ? '← Reorder' : '📊 Sales Report'}
+                </button>
+                <button style={{ ...styles.btn, background: mainTab === 'pricelist' ? '#be185d' : '#9d174d' }}
+                  onClick={() => { setMainTab(t => t === 'pricelist' ? 'reorder' : 'pricelist') }}>
+                  {mainTab === 'pricelist' ? '← Back' : '🏷️ Price List'}
                 </button>
                 <button style={{ ...styles.btn, background: mainTab === 'help' ? '#1e293b' : '#475569' }}
                   onClick={() => setMainTab(t => t === 'help' ? 'reorder' : 'help')}>
@@ -1199,6 +1357,16 @@ ${orderItems.length === 0 ? '<p style="color:#6b7280;margin-top:16px">No items t
         )}
 
         {mainTab === 'trends' && <TrendsView data={trendData} loading={trendLoading} error={trendError} />}
+        {mainTab === 'pricelist' && (
+          <PriceListView
+            items={items}
+            settings={priceListSettings}
+            readOnly={readOnly}
+            saving={plSaving}
+            onSave={savePriceListSetting}
+            onPrint={generatePriceListPDF}
+          />
+        )}
         {mainTab === 'help' && <HelpTab />}
 
         <footer style={styles.footer}>
@@ -1208,6 +1376,146 @@ ${orderItems.length === 0 ? '<p style="color:#6b7280;margin-top:16px">No items t
     </>
   )
 }
+
+// ─── PRICE LIST VIEW ──────────────────────────────────────────────────────────
+function PriceListView({ items, settings, readOnly, saving, onSave, onPrint }) {
+  const CATEGORY_ORDER = ['Beer','Cider','PreMix','White Wine','Red Wine','Rose','Sparkling','Fortified & Liqueurs','Spirits','Soft Drinks','Snacks']
+  const [editingLabel, setEditingLabel] = useState(null)
+  const [labelVal, setLabelVal]         = useState('')
+
+  // Group items by category
+  const grouped = {}
+  for (const item of items) {
+    const cat = item.category || 'Other'
+    if (!grouped[cat]) grouped[cat] = []
+    grouped[cat].push(item)
+  }
+  const cats = CATEGORY_ORDER.filter(c => grouped[c])
+
+  function getPrice(item) {
+    if (item.sellPrice != null)       return item.sellPrice
+    if (item.squareSellPrice != null) return item.squareSellPrice
+    return null
+  }
+
+  function getLabel(item) {
+    return (settings[item.name] || {}).label || item.name
+  }
+
+  function isHidden(item) {
+    return (settings[item.name] || {}).hidden === true
+  }
+
+  const visibleCount = items.filter(i => !isHidden(i)).length
+
+  return (
+    <div style={{ padding: '24px 32px', maxWidth: 1100, margin: '0 auto' }}>
+
+      {/* Toolbar */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#fff', border: '1px solid #e2e8f0', borderRadius: 10, padding: '14px 20px', marginBottom: 20 }}>
+        <div>
+          <div style={{ fontSize: 14, fontWeight: 700, color: '#0f172a' }}>Price List Editor</div>
+          <div style={{ fontSize: 11, color: '#64748b', marginTop: 2 }}>
+            {visibleCount} items shown on price list · Prices from Square unless overridden
+          </div>
+        </div>
+        <div style={{ display: 'flex', gap: 8 }}>
+          {!readOnly && (
+            <div style={{ fontSize: 11, color: '#64748b', alignSelf: 'center', textAlign: 'right', maxWidth: 200 }}>
+              Click <strong>Shown/Hidden</strong> to include or exclude items · Click name to rename for display
+            </div>
+          )}
+          <button
+            style={{ background: '#be185d', color: '#fff', border: 'none', borderRadius: 6, padding: '8px 18px', fontWeight: 700, fontSize: 13, cursor: 'pointer' }}
+            onClick={() => onPrint(items, settings)}>
+            🖨️ Print Price List
+          </button>
+        </div>
+      </div>
+
+      {/* Category sections */}
+      {cats.map(cat => (
+        <div key={cat} style={{ marginBottom: 20 }}>
+          <div style={{ background: '#1e3a5f', color: '#fff', borderRadius: '8px 8px 0 0', padding: '8px 16px', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+            {cat}
+          </div>
+          <div style={{ border: '1px solid #e2e8f0', borderTop: 'none', borderRadius: '0 0 8px 8px', overflow: 'hidden' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <thead>
+                <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
+                  <th style={{ padding: '7px 14px', textAlign: 'left', fontSize: 10, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 600 }}>Display Name</th>
+                  <th style={{ padding: '7px 14px', textAlign: 'left', fontSize: 10, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 600 }}>Square Name</th>
+                  <th style={{ padding: '7px 14px', textAlign: 'right', fontSize: 10, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 600 }}>Price</th>
+                  <th style={{ padding: '7px 14px', textAlign: 'center', fontSize: 10, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 600 }}>On List</th>
+                </tr>
+              </thead>
+              <tbody>
+                {grouped[cat].map((item, idx) => {
+                  const hidden  = isHidden(item)
+                  const price   = getPrice(item)
+                  const label   = getLabel(item)
+                  const rowBg   = hidden ? '#fafafa' : idx % 2 === 0 ? '#fff' : '#f8fafc'
+
+                  return (
+                    <tr key={item.name} style={{ background: rowBg, opacity: hidden ? 0.45 : 1 }}>
+                      {/* Display label */}
+                      <td style={{ padding: '7px 14px', fontSize: 13 }}>
+                        {!readOnly && editingLabel === item.name ? (
+                          <input autoFocus value={labelVal}
+                            style={{ fontSize: 13, border: '1px solid #2563eb', borderRadius: 4, padding: '2px 6px', width: 220 }}
+                            onChange={e => setLabelVal(e.target.value)}
+                            onBlur={() => { onSave(item.name, 'label', labelVal || item.name); setEditingLabel(null) }}
+                            onKeyDown={e => { if (e.key === 'Enter') { onSave(item.name, 'label', labelVal || item.name); setEditingLabel(null) } if (e.key === 'Escape') setEditingLabel(null) }} />
+                        ) : (
+                          <span
+                            style={{ cursor: readOnly ? 'default' : 'pointer', color: '#0f172a', fontWeight: label !== item.name ? 600 : 400 }}
+                            onClick={() => { if (!readOnly) { setEditingLabel(item.name); setLabelVal(label) } }}
+                            title={readOnly ? '' : 'Click to edit display name'}>
+                            {label}
+                            {label !== item.name && !readOnly && <span style={{ fontSize: 10, color: '#2563eb', marginLeft: 6 }}>✎</span>}
+                          </span>
+                        )}
+                      </td>
+
+                      {/* Square name */}
+                      <td style={{ padding: '7px 14px', fontSize: 11, color: '#94a3b8' }}>{item.name}</td>
+
+                      {/* Price — from Square only */}
+                      <td style={{ padding: '7px 14px', textAlign: 'right' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 6 }}>
+                          <span style={{ fontSize: 14, fontWeight: 700, fontFamily: 'monospace', color: price != null ? '#0f172a' : '#cbd5e1' }}>
+                            {price != null ? `$${Number(price).toFixed(2)}` : '—'}
+                          </span>
+                          {price != null && <span style={{ fontSize: 9, color: '#94a3b8' }}>Square</span>}
+                          {price == null && !readOnly && <span style={{ fontSize: 9, color: '#dc2626' }}>Set in Square</span>}
+                        </div>
+                      </td>
+
+                      {/* Show/hide toggle */}
+                      <td style={{ padding: '7px 14px', textAlign: 'center' }}>
+                        {readOnly ? (
+                          <span style={{ fontSize: 11, color: hidden ? '#dc2626' : '#16a34a' }}>{hidden ? 'Hidden' : 'Shown'}</span>
+                        ) : (
+                          <button
+                            style={{ fontSize: 11, fontWeight: 600, padding: '3px 10px', borderRadius: 99, border: 'none', cursor: 'pointer',
+                              background: hidden ? '#fee2e2' : '#dcfce7', color: hidden ? '#dc2626' : '#16a34a' }}
+                            onClick={() => onSave(item.name, 'hidden', !hidden)}>
+                            {hidden ? 'Hidden' : 'Shown'}
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
 
 // ─── TRENDS VIEW ──────────────────────────────────────────────────────────────
 const TREND_CAT_COLORS = {
