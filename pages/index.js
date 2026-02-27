@@ -1425,17 +1425,11 @@ function BestSellersView({ items }) {
 
   const top10 = sorted.slice(0, 10)
 
-  // Worst: items with stock but not sold in 60+ days
+  // Worst: items with stock but zero sales recorded in the 90 day window
   const notSelling = withData.filter(i => {
-    if ((i.onHand || 0) <= 0) return false  // no stock, ignore
-    if (!i.lastSold) return true            // never sold
-    const daysSince = Math.floor((today - new Date(i.lastSold)) / (1000 * 60 * 60 * 24))
-    return daysSince >= STALE_DAYS
-  }).sort((a, b) => {
-    const dA = a.lastSold ? Math.floor((today - new Date(a.lastSold)) / 86400000) : 9999
-    const dB = b.lastSold ? Math.floor((today - new Date(b.lastSold)) / 86400000) : 9999
-    return dB - dA
-  })
+    if ((i.onHand || 0) <= 0) return false   // no stock, ignore
+    return (i.soldLast90 || 0) === 0          // no sales in last 90 days
+  }).sort((a, b) => (b.onHand || 0) - (a.onHand || 0))
 
   // Consistent performers: top 20% by weekly avg, sold in last 30 days
   const avgThreshold = sorted[Math.floor(sorted.length * 0.2)]?.weeklyAvg || 0
@@ -1461,7 +1455,7 @@ function BestSellersView({ items }) {
         {[
           { label: 'Top Seller', value: top10[0]?.name.split(' ').slice(0,3).join(' ') || '—', sub: top10[0] ? `${top10[0].weeklyAvg} / week` : '', color: '#16a34a' },
           { label: 'Items Tracked', value: withData.length, sub: `${items.length} total`, color: '#2563eb' },
-          { label: 'Not Selling', value: notSelling.length, sub: `${STALE_DAYS}+ days with stock`, color: '#dc2626' },
+          { label: 'Not Selling', value: notSelling.length, sub: 'zero sales, has stock', color: '#dc2626' },
           { label: 'Consistent Stars', value: consistent.length, sub: 'top 20% + sold recently', color: '#d97706' },
         ].map(({ label, value, sub, color }) => (
           <div key={label} style={{ background: '#fff', borderRadius: 10, border: '1px solid #e2e8f0', padding: '12px 18px', flex: 1, minWidth: 150 }}>
@@ -1507,7 +1501,7 @@ function BestSellersView({ items }) {
           {/* Not selling */}
           <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #e2e8f0', overflow: 'hidden' }}>
             <div style={{ background: '#7f1d1d', color: '#fff', padding: '10px 16px', fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.07em' }}>
-              ⚠️ Not Selling — {STALE_DAYS}+ Days With Stock
+              ⚠️ Not Selling — Zero Sales in Last 90 Days
             </div>
             {notSelling.length === 0 ? (
               <div style={{ padding: '16px', fontSize: 12, color: '#64748b', textAlign: 'center' }}>No items — everything is selling! ✓</div>
@@ -1522,8 +1516,8 @@ function BestSellersView({ items }) {
                         <div style={{ fontSize: 10, color: '#64748b' }}>{item.category} · {item.onHand} in stock</div>
                       </div>
                       <div style={{ textAlign: 'right' }}>
-                        <div style={{ fontSize: 12, fontWeight: 700, color: '#dc2626' }}>{days === null ? 'Never sold' : `${days} days`}</div>
-                        <div style={{ fontSize: 10, color: '#94a3b8' }}>since last sale</div>
+                        <div style={{ fontSize: 12, fontWeight: 700, color: '#dc2626' }}>0 sales</div>
+                        <div style={{ fontSize: 10, color: '#94a3b8' }}>last 90 days</div>
                       </div>
                     </div>
                   )
