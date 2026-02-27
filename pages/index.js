@@ -529,7 +529,8 @@ export default function Home() {
       const price = item.sellPrice != null ? item.sellPrice : item.squareSellPrice
       const label = pl.label || item.name
       if (!grouped[cat]) grouped[cat] = []
-      grouped[cat].push({ label, price })
+      const variations = (item.variations || []).filter(v => v.price != null)
+      grouped[cat].push({ label, price, variations: variations.length > 1 ? variations : null })
     }
 
     // Split into two pages by categories
@@ -543,10 +544,13 @@ export default function Home() {
         <div class="category-card">
           <div class="cat-header">${cat}</div>
           <table class="price-table">
-            ${grouped[cat].map(({ label, price }) => `
+            ${grouped[cat].map(({ label, price, variations }) => `
               <tr>
                 <td class="item-name">${label}</td>
-                <td class="item-price">${price != null ? '$' + Number(price).toFixed(2) : '—'}</td>
+                <td class="item-price">${variations
+                  ? variations.map(v => `<div style="display:flex;justify-content:space-between;gap:8px;line-height:1.6"><span style="font-size:10px;color:#64748b;font-weight:400">${v.name}</span><span>$${Number(v.price).toFixed(2)}</span></div>`).join('')
+                  : (price != null ? '$' + Number(price).toFixed(2) : '—')
+                }</td>
               </tr>`).join('')}
           </table>
         </div>`).join('')
@@ -1398,6 +1402,13 @@ function PriceListView({ items, settings, readOnly, saving, onSave, onPrint }) {
     return null
   }
 
+  function getVariations(item) {
+    // If item has multiple named variations (e.g. Glass + Bottle), return them
+    const vars = (item.variations || []).filter(v => v.price != null)
+    if (vars.length > 1) return vars
+    return null
+  }
+
   function getLabel(item) {
     return (settings[item.name] || {}).label || item.name
   }
@@ -1482,13 +1493,31 @@ function PriceListView({ items, settings, readOnly, saving, onSave, onPrint }) {
 
                       {/* Price — from Square only */}
                       <td style={{ padding: '7px 14px', textAlign: 'right' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 6 }}>
-                          <span style={{ fontSize: 14, fontWeight: 700, fontFamily: 'monospace', color: price != null ? '#0f172a' : '#cbd5e1' }}>
-                            {price != null ? `$${Number(price).toFixed(2)}` : '—'}
-                          </span>
-                          {price != null && <span style={{ fontSize: 9, color: '#94a3b8' }}>Square</span>}
-                          {price == null && !readOnly && <span style={{ fontSize: 9, color: '#dc2626' }}>Set in Square</span>}
-                        </div>
+                        {(() => {
+                          const variations = getVariations(item)
+                          if (variations) {
+                            return (
+                              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2 }}>
+                                {variations.map(v => (
+                                  <div key={v.name} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                    <span style={{ fontSize: 10, color: '#64748b' }}>{v.name}</span>
+                                    <span style={{ fontSize: 13, fontWeight: 700, fontFamily: 'monospace', color: '#0f172a' }}>${Number(v.price).toFixed(2)}</span>
+                                  </div>
+                                ))}
+                                <span style={{ fontSize: 9, color: '#94a3b8' }}>Square</span>
+                              </div>
+                            )
+                          }
+                          return (
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 6 }}>
+                              <span style={{ fontSize: 14, fontWeight: 700, fontFamily: 'monospace', color: price != null ? '#0f172a' : '#cbd5e1' }}>
+                                {price != null ? `$${Number(price).toFixed(2)}` : '—'}
+                              </span>
+                              {price != null && <span style={{ fontSize: 9, color: '#94a3b8' }}>Square</span>}
+                              {price == null && !readOnly && <span style={{ fontSize: 9, color: '#dc2626' }}>Set in Square</span>}
+                            </div>
+                          )
+                        })()}
                       </td>
 
                       {/* Show/hide toggle */}
