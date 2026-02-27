@@ -568,7 +568,7 @@ export default function Home() {
               <tr>
                 <td class="nm">${label}</td>
                 <td class="pr">${variations
-                  ? `<table style="border-collapse:collapse;width:100%">${variations.map(v => `<tr><td style="font-size:10px;color:#64748b;padding-right:6px;white-space:nowrap">${v.name}</td><td style="font-size:13px;font-weight:700;font-family:Courier New,monospace;text-align:right;white-space:nowrap">$${Number(v.price).toFixed(2)}</td></tr>`).join('')}</table>`
+                  ? `<table style="border-collapse:collapse;width:100%;line-height:1.3">${variations.map(v => `<tr><td style="font-size:12px;color:#64748b;padding:3px 8px 3px 0;white-space:nowrap">${v.name}</td><td style="font-size:14px;font-weight:700;font-family:Courier New,monospace;text-align:right;padding:3px 0;white-space:nowrap">$${Number(v.price).toFixed(2)}</td></tr>`).join('')}</table>`
                   : (price != null ? '$' + Number(price).toFixed(2) : '&mdash;')
                 }</td>
               </tr>`).join('')}
@@ -609,21 +609,21 @@ export default function Home() {
   }
   .cat-hdr {
     background: #1e3a5f; color: #fff;
-    font-size: 11px; font-weight: 700;
+    font-size: 13px; font-weight: 700;
     text-transform: uppercase; letter-spacing: 0.07em;
-    padding: 6px 12px;
+    padding: 8px 14px;
   }
   table { width: 100%; border-collapse: collapse; }
   tr:nth-child(even) td { background: #f8fafc; }
-  .nm { padding: 5px 12px; font-size: 13px; }
+  .nm { padding: 7px 14px; font-size: 15px; }
   .pr {
-    padding: 5px 12px; text-align: right;
-    font-size: 14px; font-weight: 700;
+    padding: 7px 14px; text-align: right;
+    font-size: 16px; font-weight: 700;
     font-family: 'Courier New', monospace;
-    white-space: nowrap; width: 72px; vertical-align: top;
+    white-space: nowrap; width: 82px; vertical-align: top;
   }
   .vr { display: flex; justify-content: space-between; gap: 4px; line-height: 1.6; }
-  .vn { font-size: 10px; color: #64748b; font-weight: 400; font-family: Arial; }
+  .vn { font-size: 12px; color: #64748b; font-weight: 400; font-family: Arial; }
 
   .page-break { page-break-before: always; }
 
