@@ -42,7 +42,7 @@ export default function Home() {
   const [printing, setPrinting]         = useState(null)
   const [daysBack, setDaysBack]         = useState(90)
   const [viewMode, setViewMode]         = useState('reorder')
-  const [mainTab, setMainTab]           = useState('reorder')
+  const [mainTab, setMainTab]           = useState('home')
   const [salesPeriod, setSalesPeriod]   = useState('month')
   const [salesCustom, setSalesCustom]   = useState({ start: '', end: '' })
   const [salesReport, setSalesReport]   = useState(null)
@@ -1149,11 +1149,15 @@ ${orderItems.length === 0 ? '<p style="color:#6b7280;margin-top:16px">No items t
                 {readOnly && <span style={{ fontSize: 10, background: '#fef9c3', color: '#854d0e', border: '1px solid #fde68a', borderRadius: 4, padding: '2px 7px', fontWeight: 700, letterSpacing: '0.05em' }}>READ ONLY</span>}
                 <span style={styles.logoSub}>GemLife Palmwoods</span>
               </div>
-              <h1 style={styles.title}>{mainTab === 'sales' ? 'Sales Report' : mainTab === 'trends' ? 'Quarterly Trends' : mainTab === 'help' ? 'Help & Guide' : mainTab === 'pricelist' ? 'Price List' : mainTab === 'bestsellers' ? 'Best & Worst Sellers' : 'Reorder Planner'}</h1>
+              <h1 style={styles.title}>{mainTab === 'sales' ? 'Sales Report' : mainTab === 'trends' ? 'Quarterly Trends' : mainTab === 'help' ? 'Help & Guide' : mainTab === 'pricelist' ? 'Price List' : mainTab === 'bestsellers' ? 'Best & Worst Sellers' : mainTab === 'home' ? 'Dashboard' : 'Reorder Planner'}</h1>
             </div>
             <div style={styles.headerRight}>
               {lastUpdated && <span style={styles.lastUpdated}>Updated {new Date(lastUpdated).toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit' })}</span>}
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                <button style={{ ...styles.btn, background: mainTab === 'home' ? '#1e3a5f' : '#334155' }}
+                  onClick={() => setMainTab('home')}>
+                  🏠 Home
+                </button>
                 <button style={{ ...styles.btn, background: '#0e7490' }} onClick={generateStockReport} title="Stock on Hand PDF">📋 Stock PDF</button>
                 <button style={{ ...styles.btn, background: '#065f46' }} onClick={generateSalesReport} title="Monthly Sales PDF">📈 Sales PDF</button>
                 <button style={{ ...styles.btn, background: '#7e22ce', ...(agmLoading ? styles.btnDisabled : {}) }} onClick={generateAGMReport} disabled={agmLoading} title="Annual AGM Report (May–April)">
@@ -1417,6 +1421,18 @@ ${orderItems.length === 0 ? '<p style="color:#6b7280;margin-top:16px">No items t
           </>
         )}
 
+        {mainTab === 'home' && (
+          <DashboardView
+            items={items}
+            lastUpdated={lastUpdated}
+            onNav={(tab) => {
+              setMainTab(tab)
+              if (tab === 'sales' && !salesReport) loadSalesReport(salesPeriod, salesCustom)
+              if (tab === 'trends' && !trendData) loadTrendData()
+              if (tab === 'bestsellers') loadSellersData()
+            }}
+          />
+        )}
         {mainTab === 'trends' && <TrendsView data={trendData} loading={trendLoading} error={trendError} />}
         {mainTab === 'bestsellers' && <BestSellersView items={items} salesData={sellersData} loading={sellersLoading} error={sellersError} />}
         {mainTab === 'pricelist' && (
@@ -1438,6 +1454,125 @@ ${orderItems.length === 0 ? '<p style="color:#6b7280;margin-top:16px">No items t
     </>
   )
 }
+
+// ─── DASHBOARD VIEW ───────────────────────────────────────────────────────────
+function DashboardView({ items, lastUpdated, onNav }) {
+
+  const critCount  = items.filter(i => i.priority === 'CRITICAL').length
+  const lowCount   = items.filter(i => i.priority === 'LOW').length
+  const orderCount = items.filter(i => i.orderQty > 0).length
+  const totalItems = items.length
+
+  const now = new Date()
+  const days = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday']
+  const sessionDays = [3, 5, 0] // Wed, Fri, Sun
+  const sessionNames = { 3: 'Wednesday', 5: 'Friday', 0: 'Sunday' }
+
+  function nextSession() {
+    const todayIdx = now.getDay()
+    const todayHour = now.getHours()
+    // find next session day (today counts if before 4:30pm)
+    for (let offset = 0; offset <= 7; offset++) {
+      const dayIdx = (todayIdx + offset) % 7
+      if (sessionDays.includes(dayIdx)) {
+        if (offset === 0 && todayHour >= 18) continue // session over today
+        const d = new Date(now)
+        d.setDate(d.getDate() + offset)
+        const label = offset === 0 ? 'Today' : offset === 1 ? 'Tomorrow' : sessionNames[dayIdx]
+        return { label, date: d.toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'short' }), isToday: offset === 0 }
+      }
+    }
+    return null
+  }
+
+  const next = nextSession()
+
+  const refreshedAgo = lastUpdated ? (() => {
+    const diffMs = now - new Date(lastUpdated)
+    const mins = Math.floor(diffMs / 60000)
+    if (mins < 1) return 'just now'
+    if (mins < 60) return `${mins}m ago`
+    const hrs = Math.floor(mins / 60)
+    return `${hrs}h ${mins % 60}m ago`
+  })() : 'Not yet refreshed'
+
+  const features = [
+    { icon: '📦', label: 'Reorder Planner', desc: 'Live stock levels, order quantities and supplier sheets', tab: 'reorder', color: '#1e3a5f' },
+    { icon: '📊', label: 'Sales Report',    desc: 'Monthly and custom period sales with category breakdown', tab: 'sales',    color: '#7c3aed' },
+    { icon: '📈', label: 'Quarterly Trends',desc: 'Four-quarter category performance charts',               tab: 'trends',   color: '#0e7490' },
+    { icon: '🏆', label: 'Best & Worst Sellers', desc: 'Top 10, slow sellers and items not selling',        tab: 'bestsellers', color: '#92400e' },
+    { icon: '🏷️', label: 'Price List',      desc: 'Two-page A4 price list for bar display',                tab: 'pricelist', color: '#be185d' },
+    { icon: '❓', label: 'Help & Guide',    desc: 'Full documentation for all features',                    tab: 'help',     color: '#475569' },
+    { icon: '👥', label: 'Volunteer Roster', desc: 'Volunteer scheduling — opens in new tab',              tab: 'roster',   color: '#065f46', external: true },
+  ]
+
+  return (
+    <div style={{ padding: '24px 32px', maxWidth: 1100, margin: '0 auto' }}>
+
+      {/* Welcome banner */}
+      <div style={{ background: 'linear-gradient(135deg, #1e3a5f 0%, #0e7490 100%)', borderRadius: 14, padding: '24px 28px', marginBottom: 24, color: '#fff', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 16 }}>
+        <div>
+          <div style={{ fontSize: 22, fontWeight: 800, marginBottom: 4 }}>🍺 Paynter Bar Hub</div>
+          <div style={{ fontSize: 13, color: '#bfdbfe', lineHeight: 1.6 }}>
+            GemLife Palmwoods · Bar Management System<br />
+            <span style={{ fontSize: 11, color: '#93c5fd' }}>Data from Square POS · {totalItems} items tracked</span>
+          </div>
+        </div>
+        <div style={{ textAlign: 'right' }}>
+          <div style={{ fontSize: 11, color: '#93c5fd', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 4 }}>Next Bar Session</div>
+          <div style={{ fontSize: 18, fontWeight: 700 }}>{next?.label || '—'}</div>
+          <div style={{ fontSize: 12, color: '#bfdbfe' }}>4:30 – 6:30 PM</div>
+        </div>
+      </div>
+
+      {/* Live stats strip */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 24 }}>
+        {[
+          { label: 'Critical Stock',   value: critCount,    sub: 'items below target',  color: '#dc2626', bg: '#fef2f2', icon: '🔴', action: () => onNav('reorder') },
+          { label: 'Low Stock',        value: lowCount,     sub: 'items running low',   color: '#d97706', bg: '#fffbeb', icon: '🟡', action: () => onNav('reorder') },
+          { label: 'Need Ordering',    value: orderCount,   sub: 'items to order now',  color: '#2563eb', bg: '#eff6ff', icon: '📋', action: () => onNav('reorder') },
+          { label: 'Last Refreshed',   value: refreshedAgo, sub: 'Square data updated', color: '#64748b', bg: '#f8fafc', icon: '🔄', action: null },
+        ].map(({ label, value, sub, color, bg, icon, action }) => (
+          <div key={label}
+            onClick={action || undefined}
+            style={{ background: bg, borderRadius: 10, border: `1px solid ${color}22`, padding: '14px 18px', cursor: action ? 'pointer' : 'default', transition: 'box-shadow 0.15s' }}
+            onMouseEnter={e => { if (action) e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.1)' }}
+            onMouseLeave={e => { e.currentTarget.style.boxShadow = 'none' }}>
+            <div style={{ fontSize: 10, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 6 }}>{icon} {label}</div>
+            <div style={{ fontSize: 26, fontWeight: 800, color, fontFamily: 'IBM Plex Mono, monospace', lineHeight: 1 }}>{value}</div>
+            <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 4 }}>{sub}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Feature grid */}
+      <div style={{ fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 12 }}>Features</div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
+        {features.map(f => (
+          <div key={f.tab}
+            onClick={() => f.external ? window.open('https://paynter-bar-roster.vercel.app/', '_blank') : onNav(f.tab)}
+            style={{ background: '#fff', borderRadius: 10, border: '1px solid #e2e8f0', padding: '16px 18px', cursor: 'pointer', display: 'flex', alignItems: 'flex-start', gap: 14, transition: 'box-shadow 0.15s, border-color 0.15s' }}
+            onMouseEnter={e => { e.currentTarget.style.boxShadow = '0 4px 16px rgba(0,0,0,0.08)'; e.currentTarget.style.borderColor = f.color }}
+            onMouseLeave={e => { e.currentTarget.style.boxShadow = 'none'; e.currentTarget.style.borderColor = '#e2e8f0' }}>
+            <div style={{ width: 40, height: 40, borderRadius: 10, background: f.color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, flexShrink: 0 }}>
+              {f.icon}
+            </div>
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 700, color: '#0f172a', marginBottom: 3 }}>{f.label}{f.external ? ' ↗' : ''}</div>
+              <div style={{ fontSize: 11, color: '#64748b', lineHeight: 1.5 }}>{f.desc}</div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Footer note */}
+      <div style={{ marginTop: 20, fontSize: 11, color: '#94a3b8', textAlign: 'center' }}>
+        Paynter Bar Hub · GemLife Palmwoods · Built for the Bar Management Team
+      </div>
+    </div>
+  )
+}
+
 
 // ─── BEST & WORST SELLERS VIEW ───────────────────────────────────────────────
 function BestSellersView({ items, salesData, loading, error }) {
