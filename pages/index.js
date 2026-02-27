@@ -1721,10 +1721,10 @@ function HelpTab() {
         { q: 'Reading the table', a: 'Each row shows current stock (On Hand), weekly average sales, target stock level, and how much to order. Red = CRITICAL (below target), yellow = LOW, green = OK.' },
         { q: 'Order Qty vs Bottles', a: 'For spirits and fortified wines, Order Qty shows nips needed and Bottles shows full bottles to buy (rounded up). For all other items, Order Qty shows units to order.' },
         { q: 'Target Weeks', a: 'Click the number in the header stats bar to change how many weeks of stock to hold. Default is 6 weeks. Affects all items\' target stock calculations.' },
-        { q: 'Filtering to order items', a: 'Tick "Order items only" in the controls bar to hide items that don\'t need ordering — useful when preparing orders.' },
+        { q: 'Filtering to order items', a: 'Tick \"Order items only\" in the controls bar to hide items that don\'t need ordering — useful when preparing orders.' },
         { q: 'Supplier tabs', a: 'Click Dan Murphys, Coles Woolies or ACW to filter the table to just that supplier. Use + Supplier to add a new supplier.' },
         { q: 'Editing item settings', a: 'Click any value in the Category, Supplier, Pack, Bottle Size or Nip Size columns to edit inline. Changes save automatically to the cloud and are shared with all committee members.' },
-        { q: 'Adding notes', a: 'Click the Notes column for any item to add a note (e.g. "Discontinued", "Check price"). Notes are saved and visible to all.' },
+        { q: 'Adding notes', a: 'Click the Notes column for any item to add a note (e.g. \"Discontinued\", \"Check price\"). Notes are saved and visible to all.' },
       ]
     },
     {
@@ -1741,10 +1741,10 @@ function HelpTab() {
       icon: '💲',
       title: 'Pricing Mode',
       items: [
-        { q: 'Enabling pricing', a: 'Click $ Pricing in the controls bar to reveal Buy Price, Sell Price and Margin % columns.' },
-        { q: 'Sell prices from Square', a: 'Sell prices are imported automatically from your Square catalogue. Items marked "from Square" have been auto-populated. Click any price to override it.' },
+        { q: 'Enabling pricing', a: 'Click $ Pricing in the controls bar to reveal Buy Price, Sell Price and Margin % columns. This view is only available to committee members.' },
+        { q: 'Sell prices from Square', a: 'Sell prices are imported automatically from your Square catalogue. Items marked \"from Square\" have been auto-populated. All price changes must be made in Square — this keeps Square as the single source of truth.' },
         { q: 'Margin calculation', a: 'Margin % = (Sell − Buy) ÷ Sell × 100. Green = 40%+, amber = 20–40%, red = below 20%. Requires both buy and sell price to be set.' },
-        { q: 'Buy prices', a: 'Click the Buy Price cell for any item and type the cost price. Saved to the cloud and shared across all sessions.' },
+        { q: 'Buy prices', a: 'Click the Buy Price cell for any item and type the cost price. Saved to the cloud and shared across all committee sessions.' },
       ]
     },
     {
@@ -1759,12 +1759,34 @@ function HelpTab() {
       ]
     },
     {
+      icon: '📈',
+      title: 'Quarterly Trends',
+      items: [
+        { q: 'Opening trends', a: 'Click 📈 Trends in the top-right header. The chart loads the last 4 completed calendar quarters automatically.' },
+        { q: 'Reading the charts', a: 'Each category gets its own bar chart showing units sold per quarter. A trend indicator (▲ up, ▼ down, → stable) shows the direction from the earliest to most recent quarter.' },
+        { q: 'Summary panel', a: 'The top panel shows total units sold across all categories for each quarter, with a mini bar chart for a quick visual comparison.' },
+        { q: 'Revenue data', a: 'Where available from Square, revenue figures are shown alongside unit counts for each quarter and category.' },
+      ]
+    },
+    {
+      icon: '🏷️',
+      title: 'Price List',
+      items: [
+        { q: 'Opening the price list', a: 'Click 🏷️ Price List in the top-right header. The editor shows all items grouped by category with their current Square prices.' },
+        { q: 'Showing and hiding items', a: 'Click the Shown/Hidden toggle next to any item to include or exclude it from the printed price list. Items with zero stock in Square are automatically excluded. Hidden items are shown faded in the editor.' },
+        { q: 'Prices', a: 'All prices come directly from Square. To change a price, update it in Square and click Refresh. Wine items with both a Glass and Bottle price in Square will show both, with Glass listed first.' },
+        { q: 'Printing the price list', a: 'Click 🖨️ Print Price List to open a two-page A4 portrait document — categories split across both pages in a two-column card layout. In the print dialog set paper to A4, margins to None and scale to 100%.' },
+        { q: 'Edit access', a: 'The Shown/Hidden toggle is only available to committee members. Read-only users can view the price list but cannot make changes.' },
+      ]
+    },
+    {
       icon: '🖨️',
       title: 'Printing & Exports',
       items: [
         { q: 'Print Order Sheet', a: 'Click Print Order Sheet → choose a supplier to open a print-ready order form. Use your browser\'s Print dialog or Save as PDF.' },
         { q: '📋 Stock PDF', a: 'Generates a Stock on Hand management report from current Square data — all items by category with status and order quantities. Print dialog opens automatically.' },
         { q: '📈 Sales PDF', a: 'Generates a Monthly Sales Report for the previous completed month — category breakdown, top 10 sellers, revenue and prior month comparisons. Best run on the 1st of each month.' },
+        { q: '📑 AGM PDF', a: 'Generates a full annual financial year report (May–April) including quarterly performance chart, category breakdown with prior year comparisons, and top 10 sellers. Fetches 6 months of Square data — allow 20–30 seconds to build. The button shows \"⏳ Building...\" while loading.' },
         { q: 'Export Stocktake', a: 'Downloads an Excel spreadsheet for quarterly stocktakes. Count columns for Cool Room, Store Room and Bar. For spirits, enter decimal bottles (e.g. 4.5) — the sheet calculates nips automatically and shows the variance against Square.' },
       ]
     },
@@ -1772,21 +1794,21 @@ function HelpTab() {
       icon: '⚙️',
       title: 'Settings & Administration',
       items: [
-        { q: 'Shared settings', a: 'All settings (categories, suppliers, pack sizes, bottle/nip sizes, prices, notes, target weeks) are saved to the cloud. Any committee member sees the same settings on any device.' },
+        { q: 'Shared settings', a: 'All settings (categories, suppliers, pack sizes, bottle/nip sizes, prices, notes, target weeks, price list visibility) are saved to the cloud. Any committee member sees the same settings on any device.' },
         { q: 'Adding suppliers', a: 'Use the + Supplier button in the controls bar. Assign items to suppliers by clicking the Supplier column inline.' },
         { q: 'Item categories', a: 'Available categories: Beer, Cider, PreMix, White Wine, Red Wine, Rose, Sparkling, Fortified & Liqueurs, Spirits, Soft Drinks, Snacks. Spirits and Fortified & Liqueurs items get the bottle and nip size columns.' },
-        { q: 'Square POS connection', a: 'The app connects to your Square account via API. Stock levels and sales update on every Refresh. Square remains the source of truth — all transactions happen through Square as normal.' },
+        { q: 'Square POS connection', a: 'The app connects to your Square account via API. Stock levels, sales and prices update on every Refresh. Square is always the source of truth — all transactions and price changes are made in Square.' },
       ]
     },
     {
       icon: '👁',
       title: 'Access Levels',
       items: [
-        { q: 'Committee access', a: 'Full access to all features including editing item settings, changing categories, suppliers, pack sizes, bottle and nip sizes, buy and sell prices, notes, and target weeks. Can also export the stocktake spreadsheet and add suppliers.' },
-        { q: 'Homeowners committee access', a: 'Read-only access. All data is visible — stock levels, order quantities, sales reports, trends charts and PDF reports — but nothing can be edited or changed. A READ ONLY badge is shown in the header when logged in with the homeowners PIN.' },
-        { q: 'What read-only users can view', a: 'Stock on hand, weekly averages, order quantities, item status (Critical/Low/OK), sales reports, quarterly trends, category breakdowns, top sellers, and all PDF reports including the AGM annual report.' },
-        { q: 'What read-only users cannot do', a: 'Edit any item settings (category, supplier, pack size, bottle size, nip size, notes), change buy or sell prices, export the stocktake spreadsheet, add suppliers, or change the target weeks stock level.' },
-        { q: 'Pricing visibility', a: 'Buy and sell prices are only visible to committee members. The $ Pricing view is hidden entirely for read-only users to keep cost prices confidential.' },
+        { q: 'Committee access', a: 'Full access to all features including editing item settings, categories, suppliers, pack sizes, bottle and nip sizes, buy prices, notes, target weeks, and price list visibility toggles. Can also export the stocktake spreadsheet and add suppliers.' },
+        { q: 'Homeowners committee access', a: 'Read-only access. All data is visible — stock levels, order quantities, sales reports, trends, price list and PDF reports — but nothing can be edited. A READ ONLY badge appears in the header.' },
+        { q: 'What read-only users can view', a: 'Stock on hand, weekly averages, order quantities, item status, sales reports, quarterly trends, category breakdowns, top sellers, price list, and all PDF reports including the AGM annual report.' },
+        { q: 'What read-only users cannot do', a: 'Edit any item settings, change prices, toggle price list visibility, export the stocktake spreadsheet, add suppliers, or change target weeks.' },
+        { q: 'Pricing visibility', a: 'Buy prices and the $ Pricing view are only visible to committee members — hidden entirely for read-only users to keep cost prices confidential.' },
       ]
     },
   ]
