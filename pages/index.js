@@ -592,11 +592,11 @@ export default function Home() {
 
   .hdr {
     display: flex; justify-content: space-between; align-items: center;
-    background: #0f172a; color: #fff;
+    background: #1e40af; color: #fff;
     padding: 10px 16px; border-radius: 6px; margin-bottom: 10px;
   }
   .title { font-size: 20px; font-weight: 800; }
-  .sub   { font-size: 10px; color: #94a3b8; margin-top: 2px; }
+  .sub   { font-size: 10px; color: #bfdbfe; margin-top: 2px; }
   .badge { background: #f59e0b; color: #0f172a; font-size: 10px; font-weight: 700; padding: 3px 10px; border-radius: 99px; }
 
   .cols { columns: 2; column-gap: 10px; }
