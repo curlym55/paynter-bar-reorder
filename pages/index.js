@@ -1471,9 +1471,9 @@ function isHidden(item) {
 
                   return (
                     <tr key={item.name} style={{ background: rowBg, opacity: hidden ? 0.45 : 1 }}>
-                      {/* Display label */}
+                      {/* Display name */}
                       <td style={{ padding: '7px 14px', fontSize: 13, color: '#0f172a' }}>
-                        {label}
+                        {item.name}
                       </td>
 
                       {/* Square name */}
