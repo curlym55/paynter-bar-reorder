@@ -525,6 +525,7 @@ export default function Home() {
     for (const item of items) {
       const pl  = settings[item.name] || {}
       if (pl.hidden) continue
+      if ((item.onHand || 0) <= 0) continue   // skip zero stock
       const cat = item.category || 'Other'
       const price = item.sellPrice != null ? item.sellPrice : item.squareSellPrice
       const label = pl.label || item.name
@@ -588,47 +589,50 @@ export default function Home() {
 <meta charset="UTF-8">
 <title>Paynter Bar Price List</title>
 <style>
-  @page { size: A4 portrait; margin: 12mm; }
+  @page { size: A4 portrait; margin: 10mm; }
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: Arial, sans-serif; color: #1f2937; background: #fff; }
+  body { font-family: Arial, sans-serif; font-size: 12px; color: #1f2937; background: #fff; }
 
   .hdr {
     display: flex; justify-content: space-between; align-items: center;
     background: #0f172a; color: #fff;
-    padding: 12px 18px; border-radius: 8px; margin-bottom: 12px;
+    padding: 10px 16px; border-radius: 6px; margin-bottom: 10px;
   }
-  .title { font-size: 24px; font-weight: 800; }
-  .sub   { font-size: 11px; color: #94a3b8; margin-top: 3px; }
-  .badge { background: #f59e0b; color: #0f172a; font-size: 11px; font-weight: 700; padding: 4px 12px; border-radius: 99px; }
+  .title { font-size: 20px; font-weight: 800; }
+  .sub   { font-size: 10px; color: #94a3b8; margin-top: 2px; }
+  .badge { background: #f59e0b; color: #0f172a; font-size: 10px; font-weight: 700; padding: 3px 10px; border-radius: 99px; }
+
+  .cols { columns: 2; column-gap: 10px; }
 
   .card {
     break-inside: avoid;
-    border: 1px solid #e2e8f0; border-radius: 6px;
-    overflow: hidden; margin-bottom: 10px;
+    border: 1px solid #e2e8f0; border-radius: 5px;
+    overflow: hidden; margin-bottom: 8px;
+    display: inline-block; width: 100%;
   }
   .cat-hdr {
     background: #1e3a5f; color: #fff;
-    font-size: 12px; font-weight: 700;
+    font-size: 11px; font-weight: 700;
     text-transform: uppercase; letter-spacing: 0.07em;
-    padding: 7px 14px;
+    padding: 6px 12px;
   }
   table { width: 100%; border-collapse: collapse; }
   tr:nth-child(even) td { background: #f8fafc; }
-  .nm { padding: 7px 14px; font-size: 14px; }
+  .nm { padding: 5px 12px; font-size: 13px; }
   .pr {
-    padding: 7px 14px; text-align: right;
-    font-size: 15px; font-weight: 700;
+    padding: 5px 12px; text-align: right;
+    font-size: 14px; font-weight: 700;
     font-family: 'Courier New', monospace;
-    white-space: nowrap; width: 80px; vertical-align: top;
+    white-space: nowrap; width: 72px; vertical-align: top;
   }
-  .vr { display: flex; justify-content: space-between; gap: 6px; line-height: 1.7; }
-  .vn { font-size: 11px; color: #64748b; font-weight: 400; font-family: Arial; }
+  .vr { display: flex; justify-content: space-between; gap: 4px; line-height: 1.6; }
+  .vn { font-size: 10px; color: #64748b; font-weight: 400; font-family: Arial; }
 
   .page-break { page-break-before: always; }
 
   .ftr {
-    text-align: center; font-size: 9px; color: #94a3b8;
-    margin-top: 10px; padding-top: 6px;
+    text-align: center; font-size: 8.5px; color: #94a3b8;
+    margin-top: 8px; padding-top: 4px;
     border-top: 1px solid #f1f5f9;
   }
 
@@ -640,12 +644,12 @@ export default function Home() {
 </head><body>
 
   ${hdr}
-  ${renderCards(page1cats)}
+  <div class="cols">${renderCards(page1cats)}</div>
   <div class="ftr">Page 1 of 2 &nbsp;·&nbsp; Prices current as of ${generated} &nbsp;·&nbsp; Paynter Bar, GemLife Palmwoods</div>
 
   <div class="page-break">
     ${hdr}
-    ${renderCards(page2cats)}
+    <div class="cols">${renderCards(page2cats)}</div>
     <div class="ftr">Page 2 of 2 &nbsp;·&nbsp; Prices current as of ${generated} &nbsp;·&nbsp; Paynter Bar, GemLife Palmwoods</div>
   </div>
 
@@ -1404,8 +1408,6 @@ ${orderItems.length === 0 ? '<p style="color:#6b7280;margin-top:16px">No items t
 // ─── PRICE LIST VIEW ──────────────────────────────────────────────────────────
 function PriceListView({ items, settings, readOnly, saving, onSave, onPrint }) {
   const CATEGORY_ORDER = ['Beer','Cider','PreMix','White Wine','Red Wine','Rose','Sparkling','Fortified & Liqueurs','Spirits','Soft Drinks','Snacks']
-  const [editingLabel, setEditingLabel] = useState(null)
-  const [labelVal, setLabelVal]         = useState('')
 
   // Group items by category
   const grouped = {}
@@ -1429,11 +1431,7 @@ function PriceListView({ items, settings, readOnly, saving, onSave, onPrint }) {
     return null
   }
 
-  function getLabel(item) {
-    return (settings[item.name] || {}).label || item.name
-  }
-
-  function isHidden(item) {
+function isHidden(item) {
     return (settings[item.name] || {}).hidden === true
   }
 
@@ -1453,7 +1451,7 @@ function PriceListView({ items, settings, readOnly, saving, onSave, onPrint }) {
         <div style={{ display: 'flex', gap: 8 }}>
           {!readOnly && (
             <div style={{ fontSize: 11, color: '#64748b', alignSelf: 'center', textAlign: 'right', maxWidth: 200 }}>
-              Click <strong>Shown/Hidden</strong> to include or exclude items · Click name to rename for display
+              Click <strong>Shown/Hidden</strong> to include or exclude items from the price list
             </div>
           )}
           <button
@@ -1481,31 +1479,16 @@ function PriceListView({ items, settings, readOnly, saving, onSave, onPrint }) {
                 </tr>
               </thead>
               <tbody>
-                {grouped[cat].map((item, idx) => {
+                {grouped[cat].filter(item => (item.onHand || 0) > 0 || isHidden(item)).map((item, idx) => {
                   const hidden  = isHidden(item)
                   const price   = getPrice(item)
-                  const label   = getLabel(item)
                   const rowBg   = hidden ? '#fafafa' : idx % 2 === 0 ? '#fff' : '#f8fafc'
 
                   return (
                     <tr key={item.name} style={{ background: rowBg, opacity: hidden ? 0.45 : 1 }}>
                       {/* Display label */}
-                      <td style={{ padding: '7px 14px', fontSize: 13 }}>
-                        {!readOnly && editingLabel === item.name ? (
-                          <input autoFocus value={labelVal}
-                            style={{ fontSize: 13, border: '1px solid #2563eb', borderRadius: 4, padding: '2px 6px', width: 220 }}
-                            onChange={e => setLabelVal(e.target.value)}
-                            onBlur={() => { onSave(item.name, 'label', labelVal || item.name); setEditingLabel(null) }}
-                            onKeyDown={e => { if (e.key === 'Enter') { onSave(item.name, 'label', labelVal || item.name); setEditingLabel(null) } if (e.key === 'Escape') setEditingLabel(null) }} />
-                        ) : (
-                          <span
-                            style={{ cursor: readOnly ? 'default' : 'pointer', color: '#0f172a', fontWeight: label !== item.name ? 600 : 400 }}
-                            onClick={() => { if (!readOnly) { setEditingLabel(item.name); setLabelVal(label) } }}
-                            title={readOnly ? '' : 'Click to edit display name'}>
-                            {label}
-                            {label !== item.name && !readOnly && <span style={{ fontSize: 10, color: '#2563eb', marginLeft: 6 }}>✎</span>}
-                          </span>
-                        )}
+                      <td style={{ padding: '7px 14px', fontSize: 13, color: '#0f172a' }}>
+                        {label}
                       </td>
 
                       {/* Square name */}
