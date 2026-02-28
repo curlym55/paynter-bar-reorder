@@ -53,7 +53,6 @@ export default function Home() {
   const [trendData, setTrendData]       = useState(null)
   const [trendLoading, setTrendLoading] = useState(false)
   const [trendError, setTrendError]     = useState(null)
-  const [agmLoading, setAgmLoading]     = useState(false)
   const [sellersData, setSellersData]   = useState(null)
   const [sellersLoading, setSellersLoading] = useState(false)
   const [sellersError, setSellersError] = useState(null)
@@ -278,240 +277,6 @@ export default function Home() {
   }
 
   // ── GENERATE AGM ANNUAL REPORT PDF ────────────────────────────────────────
-  async function generateAGMReport() {
-    if (agmLoading) return
-    setAgmLoading(true)
-    const now = new Date()
-    // Financial year: May 1 to April 30
-    // Determine current FY: if month >= May (4), FY started this year; else last year
-    const fyStartYear = now.getMonth() >= 4 ? now.getFullYear() : now.getFullYear() - 1
-    const fyStart = new Date(fyStartYear, 4, 1, 0, 0, 0)       // May 1
-    const fyEnd   = new Date(fyStartYear + 1, 3, 30, 23, 59, 59) // Apr 30
-    // Prior year
-    const pyStart = new Date(fyStartYear - 1, 4, 1, 0, 0, 0)
-    const pyEnd   = new Date(fyStartYear, 3, 30, 23, 59, 59)
-
-    const fyLabel = `${fyStartYear}–${fyStartYear + 1}`
-    const generated = now.toLocaleString('en-AU', { day: '2-digit', month: 'long', year: 'numeric' })
-
-    // Fetch full year data + prior year
-    let report, priorReport
-    try {
-      const [r1, r2] = await Promise.all([
-        fetch(`/api/sales?start=${fyStart.toISOString()}&end=${fyEnd.toISOString()}`),
-        fetch(`/api/sales?start=${pyStart.toISOString()}&end=${pyEnd.toISOString()}`),
-      ])
-      if (!r1.ok || !r2.ok) throw new Error('Failed to fetch annual data')
-      report      = await r1.json()
-      priorReport = await r2.json()
-    } catch(e) {
-      alert('Could not fetch annual data: ' + e.message)
-      setAgmLoading(false)
-      return
-    }
-
-    // Fetch 4 quarters of current FY
-    const quarters = [
-      { label: 'Q1 May–Jul', start: new Date(fyStartYear, 4, 1), end: new Date(fyStartYear, 6, 31, 23, 59, 59) },
-      { label: 'Q2 Aug–Oct', start: new Date(fyStartYear, 7, 1), end: new Date(fyStartYear, 9, 31, 23, 59, 59) },
-      { label: 'Q3 Nov–Jan', start: new Date(fyStartYear, 10, 1), end: new Date(fyStartYear + 1, 0, 31, 23, 59, 59) },
-      { label: 'Q4 Feb–Apr', start: new Date(fyStartYear + 1, 1, 1), end: new Date(fyStartYear + 1, 3, 30, 23, 59, 59) },
-    ]
-    const qResults = await Promise.all(quarters.map(async q => {
-      try {
-        const r = await fetch(`/api/sales?start=${q.start.toISOString()}&end=${q.end.toISOString()}`)
-        const d = r.ok ? await r.json() : { categories: {}, totals: { unitsSold: 0, revenue: 0 } }
-        return { ...q, categories: d.categories, totals: d.totals }
-      } catch { return { ...q, categories: {}, totals: { unitsSold: 0, revenue: 0 } } }
-    }))
-
-    const CATEGORY_ORDER = ['Beer','Cider','PreMix','White Wine','Red Wine','Rose','Sparkling','Fortified & Liqueurs','Spirits','Soft Drinks','Snacks']
-    const hasRev = report.totals.revenue > 0
-    const fmtRev = n => n ? `$${Number(n).toLocaleString('en-AU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '—'
-    const fmtChg = (cur, pri) => {
-      if (!pri) return '—'
-      const pct = +(((cur - pri) / pri) * 100).toFixed(1)
-      return `${pct >= 0 ? '+' : ''}${pct}%`
-    }
-    const chgColor = (cur, pri) => !pri ? '#64748b' : cur >= pri ? '#16a34a' : '#dc2626'
-
-    // Category rows
-    const catRows = CATEGORY_ORDER
-      .filter(c => report.categories[c] || priorReport.categories[c])
-      .map((c, idx) => {
-        const cur = report.categories[c] || { unitsSold: 0, revenue: 0 }
-        const pri = priorReport.categories[c] || { unitsSold: 0, revenue: 0 }
-        const pct = report.totals.unitsSold > 0 ? ((cur.unitsSold / report.totals.unitsSold) * 100).toFixed(1) : 0
-        const cc  = chgColor(cur.unitsSold, pri.unitsSold)
-        const bg  = idx % 2 === 0 ? '#fff' : '#f8fafc'
-        return `<tr style="background:${bg}">
-          <td>${c}</td>
-          <td style="text-align:right;font-family:monospace;font-weight:700">${cur.unitsSold.toLocaleString()}</td>
-          <td style="text-align:right;color:#64748b;font-family:monospace">${pri.unitsSold.toLocaleString()}</td>
-          <td style="text-align:right;color:${cc};font-weight:600">${fmtChg(cur.unitsSold, pri.unitsSold)}</td>
-          <td style="text-align:right;color:#94a3b8">${pct}%</td>
-          ${hasRev ? `<td style="text-align:right;font-family:monospace;color:#16a34a">${fmtRev(cur.revenue)}</td>
-          <td style="text-align:right;font-family:monospace;color:#94a3b8">${fmtRev(pri.revenue)}</td>` : ''}
-        </tr>`
-      }).join('')
-
-    // Top 10
-    const top10 = report.items.filter(i => i.unitsSold > 0).slice(0, 10)
-    const top10Rows = top10.map((item, idx) => `
-      <tr style="background:${idx % 2 === 0 ? '#fff' : '#f8fafc'}">
-        <td style="text-align:center;color:#94a3b8;font-size:11px;font-weight:700">${idx + 1}</td>
-        <td style="font-weight:${idx < 3 ? '700' : '400'}">${item.name}</td>
-        <td style="color:#64748b;font-size:11px">${item.category}</td>
-        <td style="text-align:right;font-family:monospace;font-weight:700">${item.unitsSold.toLocaleString()}</td>
-        ${hasRev ? `<td style="text-align:right;font-family:monospace;color:#16a34a">${fmtRev(item.revenue)}</td>` : ''}
-      </tr>`).join('')
-
-    // Quarterly bar chart (inline SVG)
-    const maxUnits = Math.max(...qResults.map(q => q.totals.unitsSold), 1)
-    const barW = 120, barGap = 40, chartH = 160, leftPad = 50
-    const totalW = leftPad + qResults.length * (barW + barGap) + barGap
-    const BAR_COLORS = ['#2563eb','#0891b2','#7c3aed','#0f766e']
-    const bars = qResults.map((q, i) => {
-      const bh = Math.round((q.totals.unitsSold / maxUnits) * chartH)
-      const x  = leftPad + barGap + i * (barW + barGap)
-      const y  = chartH - bh + 20
-      return `<rect x="${x}" y="${y}" width="${barW}" height="${bh}" fill="${BAR_COLORS[i]}" rx="4"/>
-        <text x="${x + barW/2}" y="${y - 6}" text-anchor="middle" font-size="11" font-family="Arial" fill="#0f172a" font-weight="700">${q.totals.unitsSold.toLocaleString()}</text>
-        <text x="${x + barW/2}" y="${chartH + 36}" text-anchor="middle" font-size="10" font-family="Arial" fill="#475569">${q.label}</text>
-        ${hasRev ? `<text x="${x + barW/2}" y="${chartH + 50}" text-anchor="middle" font-size="9" font-family="Arial" fill="#16a34a">${fmtRev(q.totals.revenue)}</text>` : ''}`
-    }).join('')
-    // Y-axis gridlines
-    const gridLines = [0.25, 0.5, 0.75, 1].map(pct => {
-      const y = chartH - Math.round(pct * chartH) + 20
-      const val = Math.round(pct * maxUnits)
-      return `<line x1="${leftPad}" y1="${y}" x2="${totalW - barGap}" y2="${y}" stroke="#e2e8f0" stroke-width="1"/>
-        <text x="${leftPad - 6}" y="${y + 4}" text-anchor="end" font-size="9" font-family="Arial" fill="#94a3b8">${val}</text>`
-    }).join('')
-    const chartSVG = `<svg width="${totalW}" height="${chartH + 70}" xmlns="http://www.w3.org/2000/svg">
-      ${gridLines}
-      <line x1="${leftPad}" y1="20" x2="${leftPad}" y2="${chartH + 20}" stroke="#cbd5e1" stroke-width="1"/>
-      ${bars}
-    </svg>`
-
-    const html = `<!DOCTYPE html><html><head><title>Annual Report ${fyLabel} — Paynter Bar</title>
-<style>
-  *{box-sizing:border-box;margin:0;padding:0}
-  body{font-family:Arial,sans-serif;font-size:12px;color:#1f2937;background:#fff}
-  .page{padding:28px 36px}
-  .header{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:4px solid #0f172a;padding-bottom:16px;margin-bottom:24px}
-  .header-left h1{font-size:22px;font-weight:700;color:#0f172a}
-  .header-left .sub{font-size:12px;color:#64748b;margin-top:4px}
-  .header-left .fy{font-size:16px;font-weight:700;color:#2563eb;margin-top:6px}
-  .header-right{text-align:right;font-size:11px;color:#64748b;line-height:1.8}
-  .summary{display:flex;gap:0;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;margin-bottom:28px}
-  .card{flex:1;padding:14px 18px;border-right:1px solid #e2e8f0}
-  .card:last-child{border-right:none}
-  .card .num{font-size:24px;font-weight:700;font-family:monospace;color:#0f172a}
-  .card .lbl{font-size:10px;color:#64748b;text-transform:uppercase;letter-spacing:.06em;margin-top:2px}
-  .card .sub{font-size:10px;color:#94a3b8;margin-top:2px}
-  .card .chg{font-size:11px;font-weight:600;margin-top:3px}
-  .section-title{font-size:11px;font-weight:700;color:#0f172a;text-transform:uppercase;letter-spacing:.07em;margin:24px 0 10px;padding-bottom:6px;border-bottom:2px solid #e2e8f0}
-  table{width:100%;border-collapse:collapse;margin-bottom:4px}
-  th{background:#0f172a;color:#fff;padding:7px 10px;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.06em}
-  td{padding:6px 10px;border-bottom:1px solid #f1f5f9;font-size:11px}
-  .totals-row td{background:#f1f5f9;font-weight:700;border-top:2px solid #cbd5e1}
-  .chart-wrap{background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:16px;margin-bottom:4px;overflow-x:auto}
-  .footer{margin-top:28px;padding-top:12px;border-top:1px solid #e2e8f0;font-size:10px;color:#94a3b8;display:flex;justify-content:space-between}
-  @media print{body{font-size:11px}.page{padding:16px}tr{page-break-inside:avoid}.section-title{page-break-before:auto}}
-</style></head><body><div class="page">
-
-  <div class="header">
-    <div class="header-left">
-      <h1>Annual Sales Report</h1>
-      <div class="sub">Paynter Bar — GemLife Palmwoods</div>
-      <div class="fy">Financial Year ${fyLabel} &nbsp;|&nbsp; 1 May ${fyStartYear} – 30 April ${fyStartYear + 1}</div>
-    </div>
-    <div class="header-right">
-      <strong style="font-size:13px;color:#0f172a;display:block">AGM Report</strong>
-      Generated: ${generated}<br>
-      Prior year: 1 May ${fyStartYear - 1} – 30 April ${fyStartYear}
-    </div>
-  </div>
-
-  <div class="summary">
-    <div class="card">
-      <div class="num">${report.totals.unitsSold.toLocaleString()}</div>
-      <div class="lbl">Total Units Sold</div>
-      <div class="sub">Prior year: ${priorReport.totals.unitsSold.toLocaleString()}</div>
-      <div class="chg" style="color:${chgColor(report.totals.unitsSold, priorReport.totals.unitsSold)}">${fmtChg(report.totals.unitsSold, priorReport.totals.unitsSold)} vs prior year</div>
-    </div>
-    ${hasRev ? `<div class="card">
-      <div class="num" style="font-size:18px">${fmtRev(report.totals.revenue)}</div>
-      <div class="lbl">Total Revenue</div>
-      <div class="sub">Prior year: ${fmtRev(priorReport.totals.revenue)}</div>
-      <div class="chg" style="color:${chgColor(report.totals.revenue, priorReport.totals.revenue)}">${fmtChg(report.totals.revenue, priorReport.totals.revenue)} vs prior year</div>
-    </div>` : ''}
-    <div class="card">
-      <div class="num">${report.items.filter(i => i.unitsSold > 0).length}</div>
-      <div class="lbl">Items Sold</div>
-      <div class="sub">across ${Object.keys(report.categories).length} categories</div>
-    </div>
-    <div class="card">
-      <div class="num" style="font-size:15px">${report.items[0]?.name.split(' ').slice(0,3).join(' ') || '—'}</div>
-      <div class="lbl">Top Seller</div>
-      <div class="sub">${report.items[0]?.unitsSold.toLocaleString() || 0} units for the year</div>
-    </div>
-  </div>
-
-  <div class="section-title">Quarterly Performance — Units Sold</div>
-  <div class="chart-wrap">${chartSVG}</div>
-
-  <div class="section-title">Annual Category Breakdown</div>
-  <table>
-    <thead><tr>
-      <th>Category</th>
-      <th style="text-align:right">Units ${fyLabel}</th>
-      <th style="text-align:right">Units Prior Year</th>
-      <th style="text-align:right">Change</th>
-      <th style="text-align:right">% of Total</th>
-      ${hasRev ? '<th style="text-align:right">Revenue</th><th style="text-align:right">Prior Revenue</th>' : ''}
-    </tr></thead>
-    <tbody>
-      ${catRows}
-      <tr class="totals-row">
-        <td>TOTAL</td>
-        <td style="text-align:right;font-family:monospace">${report.totals.unitsSold.toLocaleString()}</td>
-        <td style="text-align:right;font-family:monospace;color:#64748b">${priorReport.totals.unitsSold.toLocaleString()}</td>
-        <td style="text-align:right">${fmtChg(report.totals.unitsSold, priorReport.totals.unitsSold)}</td>
-        <td style="text-align:right">100%</td>
-        ${hasRev ? `<td style="text-align:right;font-family:monospace;color:#16a34a">${fmtRev(report.totals.revenue)}</td><td style="text-align:right;font-family:monospace;color:#94a3b8">${fmtRev(priorReport.totals.revenue)}</td>` : ''}
-      </tr>
-    </tbody>
-  </table>
-
-  <div class="section-title">Top 10 Sellers for the Year</div>
-  <table>
-    <thead><tr>
-      <th style="width:28px;text-align:center">#</th>
-      <th>Item</th>
-      <th>Category</th>
-      <th style="text-align:right">Units Sold</th>
-      ${hasRev ? '<th style="text-align:right">Revenue</th>' : ''}
-    </tr></thead>
-    <tbody>${top10Rows}</tbody>
-  </table>
-
-  <div class="footer">
-    <span>Paynter Bar Hub — GemLife Palmwoods | Data from Square POS</span>
-    <span>Generated ${generated} | Financial Year ${fyLabel}</span>
-  </div>
-</div></body></html>`
-
-    setAgmLoading(false)
-    const w = window.open('', '_blank')
-    w.document.write(html)
-    w.document.close()
-    w.focus()
-    setTimeout(() => w.print(), 800)
-  }
-
-
-  // ── PRICE LIST SETTINGS ───────────────────────────────────────────────────
   async function savePriceListSetting(itemName, field, value) {
     const key = `${itemName}_${field}`
     setPlSaving(s => ({ ...s, [key]: true }))
@@ -1158,11 +923,9 @@ ${orderItems.length === 0 ? '<p style="color:#6b7280;margin-top:16px">No items t
                   onClick={() => setMainTab('home')}>
                   🏠 Home
                 </button>
-                <button style={{ ...styles.btn, background: '#0e7490' }} onClick={generateStockReport} title="Stock on Hand PDF">📋 Stock PDF</button>
+                <button style={{ ...styles.btn, background: '#0e7490' }} onClick={generateStockReport} title="Stock on Hand PDF">📋 SOH PDF</button>
                 <button style={{ ...styles.btn, background: '#065f46' }} onClick={generateSalesReport} title="Monthly Sales PDF">📈 Sales PDF</button>
-                <button style={{ ...styles.btn, background: '#7e22ce', ...(agmLoading ? styles.btnDisabled : {}) }} onClick={generateAGMReport} disabled={agmLoading} title="Annual AGM Report (May–April)">
-                  {agmLoading ? '⏳ Building...' : '📑 AGM PDF'}
-                </button>
+
                 <button style={{ ...styles.btn, background: mainTab === 'trends' ? '#b45309' : '#92400e' }}
                   onClick={() => { const next = mainTab === 'trends' ? 'reorder' : 'trends'; setMainTab(next); if (next === 'trends' && !trendData) loadTrendData(); }}>
                   {mainTab === 'trends' ? '← Back' : '📈 Trends'}
@@ -2084,9 +1847,9 @@ function HelpTab() {
       title: 'Printing & Exports',
       items: [
         { q: 'Print Order Sheet', a: 'Click Print Order Sheet → choose a supplier to open a print-ready order form. Use your browser\'s Print dialog or Save as PDF.' },
-        { q: '📋 Stock PDF', a: 'Generates a Stock on Hand management report from current Square data — all items by category with status and order quantities. Print dialog opens automatically.' },
+        { q: '📋 SOH PDF', a: 'Generates a Stock on Hand management report from current Square data — all items by category with status and order quantities. Print dialog opens automatically.' },
         { q: '📈 Sales PDF', a: 'Generates a Monthly Sales Report for the previous completed month — category breakdown, top 10 sellers, revenue and prior month comparisons. Best run on the 1st of each month.' },
-        { q: '📑 AGM PDF', a: 'Generates a full annual financial year report (May–April) including quarterly performance chart, category breakdown with prior year comparisons, and top 10 sellers. Fetches 6 months of Square data — allow 20–30 seconds to build. The button shows \"⏳ Building...\" while loading.' },
+        
         { q: 'Export Stocktake', a: 'Downloads an Excel spreadsheet for quarterly stocktakes. Count columns for Cool Room, Store Room and Bar. For spirits, enter decimal bottles (e.g. 4.5) — the sheet calculates nips automatically and shows the variance against Square.' },
       ]
     },
