@@ -779,7 +779,7 @@ export default function Home() {
 <table><thead><tr><th>Item</th><th>Category</th><th style="text-align:right">On Hand</th><th style="text-align:right">Order Qty</th><th style="text-align:right">Bottles</th><th>Notes</th></tr></thead>
 <tbody>${rows}</tbody></table>
 ${orderItems.length === 0 ? '<p style="color:#6b7280;margin-top:16px">No items to order from this supplier this week.</p>' : ''}
-<div class="footer">Generated ${new Date().toLocaleString('en-AU')} | Paynter Bar Reorder System</div>
+<div class="footer">Generated ${new Date().toLocaleString('en-AU', { timeZone: 'Australia/Brisbane' })} | Paynter Bar Reorder System</div>
 </body></html>`
     const w = window.open('', '_blank')
     w.document.write(html)
@@ -1324,7 +1324,7 @@ function PurchaseOrdersView({ items, poList, poView, setPoView, readOnly, onRefr
   }
 
   async function addExtraLine(po) {
-    if (!addLine.name.trim() || !addLine.qty) return
+    if (!addLine.name || !addLine.qty) return
     const updatedItems = [...po.items, {
       name:        addLine.name.trim(),
       category:    'Other',
@@ -1394,7 +1394,7 @@ function PurchaseOrdersView({ items, poList, poView, setPoView, readOnly, onRefr
       <div class="meta">
         <strong>${po.supplier}</strong> &nbsp;·&nbsp;
         PO: ${po.id} &nbsp;·&nbsp;
-        Ordered: ${new Date(po.createdAt).toLocaleDateString('en-AU', { day:'numeric', month:'short', year:'numeric' })}
+        Ordered: ${new Date(po.createdAt).toLocaleDateString('en-AU', { timeZone: 'Australia/Brisbane', day:'numeric', month:'short', year:'numeric' })}
         ${po.notes ? `<br>Notes: ${po.notes}` : ''}
       </div>
       <table>
@@ -1411,7 +1411,7 @@ function PurchaseOrdersView({ items, poList, poView, setPoView, readOnly, onRefr
         <div class="sig-block"><div class="sig-line"></div><div class="sig-label">Date received</div></div>
         <div class="sig-block"><div class="sig-line"></div><div class="sig-label">Invoice #</div></div>
       </div>
-      <div class="footer">Paynter Bar · GemLife Palmwoods · Generated ${new Date().toLocaleString('en-AU')}</div>
+      <div class="footer">Paynter Bar · GemLife Palmwoods · Generated ${new Date().toLocaleString('en-AU', { timeZone: 'Australia/Brisbane' })}</div>
     </body></html>`
 
     const w = window.open('', '_blank')
@@ -1459,8 +1459,8 @@ function PurchaseOrdersView({ items, poList, poView, setPoView, readOnly, onRefr
       <div class="meta">
         <strong>Supplier:</strong> ${po.supplier}<br>
         <strong>PO Reference:</strong> ${po.id}<br>
-        <strong>Order Date:</strong> ${new Date(po.createdAt).toLocaleDateString('en-AU', { day:'numeric', month:'long', year:'numeric' })}<br>
-        <strong>Received:</strong> ${po.receivedAt ? new Date(po.receivedAt).toLocaleDateString('en-AU', { day:'numeric', month:'long', year:'numeric' }) : 'N/A'}<br>
+        <strong>Order Date:</strong> ${new Date(po.createdAt).toLocaleDateString('en-AU', { timeZone: 'Australia/Brisbane', day:'numeric', month:'long', year:'numeric' })}<br>
+        <strong>Received:</strong> ${po.receivedAt ? new Date(po.receivedAt).toLocaleDateString('en-AU', { timeZone: 'Australia/Brisbane', day:'numeric', month:'long', year:'numeric' }) : 'N/A'}<br>
         ${po.notes ? `<strong>Notes:</strong> ${po.notes}` : ''}
       </div>
       <table>
@@ -1472,7 +1472,7 @@ function PurchaseOrdersView({ items, poList, poView, setPoView, readOnly, onRefr
       </table>
       ${totalReceived > 0 ? `<div class="total">Total Cost: <strong>$${totalReceived.toFixed(2)}</strong></div>` : ''}
       <div class="footer">
-        Paynter Bar · GemLife Palmwoods · Report generated ${new Date().toLocaleString('en-AU')}<br>
+        Paynter Bar · GemLife Palmwoods · Report generated ${new Date().toLocaleString('en-AU', { timeZone: 'Australia/Brisbane' })}<br>
         Please attach this report to the supplier invoice and forward to the Treasurer.
       </div>
     </body></html>`
@@ -1497,7 +1497,7 @@ function PurchaseOrdersView({ items, poList, poView, setPoView, readOnly, onRefr
             <button onClick={() => setPoView(null)} style={{ background: 'none', border: 'none', color: '#2563eb', cursor: 'pointer', fontSize: 13, padding: 0, marginBottom: 6 }}>← Back to orders</button>
             <h2 style={{ fontSize: 18, fontWeight: 700, color: '#0f172a', margin: 0 }}>{po.supplier}</h2>
             <div style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>
-              {po.id} · Created {new Date(po.createdAt).toLocaleDateString('en-AU', { day:'numeric', month:'short', year:'numeric' })}
+              {po.id} · Created {new Date(po.createdAt).toLocaleDateString('en-AU', { timeZone: 'Australia/Brisbane', day:'numeric', month:'short', year:'numeric' })}
               {po.notes && ` · ${po.notes}`}
             </div>
           </div>
@@ -1586,12 +1586,26 @@ function PurchaseOrdersView({ items, poList, poView, setPoView, readOnly, onRefr
               </button>
             ) : (
               <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-                <input
-                  placeholder="Item name"
+                <select
                   value={addLine.name}
-                  onChange={e => setAddLine(l => ({ ...l, name: e.target.value }))}
-                  style={{ flex: 2, padding: '6px 10px', border: '1px solid #e2e8f0', borderRadius: 6, fontSize: 13, minWidth: 160 }}
-                />
+                  onChange={e => {
+                    const selected = items.find(i => i.name === e.target.value)
+                    setAddLine(l => ({
+                      ...l,
+                      name: e.target.value,
+                      unit: selected?.isSpirit ? 'bottles' : 'units'
+                    }))
+                  }}
+                  style={{ flex: 2, padding: '6px 10px', border: '1px solid #e2e8f0', borderRadius: 6, fontSize: 13, minWidth: 160 }}>
+                  <option value="">— Select item —</option>
+                  {[...new Set(items.map(i => i.category))].filter(Boolean).sort().map(cat => (
+                    <optgroup key={cat} label={cat}>
+                      {items.filter(i => i.category === cat).sort((a,b) => a.name.localeCompare(b.name)).map(i => (
+                        <option key={i.name} value={i.name}>{i.name}</option>
+                      ))}
+                    </optgroup>
+                  ))}
+                </select>
                 <input
                   type="number" min="1" placeholder="Qty"
                   value={addLine.qty}
@@ -1711,7 +1725,7 @@ function PurchaseOrdersView({ items, poList, poView, setPoView, readOnly, onRefr
                     onClick={() => setPoView(po)}>
                     <td style={{ padding: '9px 14px', fontSize: 12, fontFamily: 'monospace', color: '#475569' }}>{po.id}</td>
                     <td style={{ padding: '9px 14px', fontSize: 13, fontWeight: 600, color: '#0f172a' }}>{po.supplier}</td>
-                    <td style={{ padding: '9px 14px', fontSize: 12, color: '#64748b' }}>{new Date(po.createdAt).toLocaleDateString('en-AU', { day:'numeric', month:'short', year:'numeric' })}</td>
+                    <td style={{ padding: '9px 14px', fontSize: 12, color: '#64748b' }}>{new Date(po.createdAt).toLocaleDateString('en-AU', { timeZone: 'Australia/Brisbane', day:'numeric', month:'short', year:'numeric' })}</td>
                     <td style={{ padding: '9px 14px', fontSize: 12, color: '#64748b' }}>{po.items.length} lines</td>
                     <td style={{ padding: '9px 14px' }}>
                       <span style={{ background: sc.bg, color: sc.text, fontWeight: 700, fontSize: 11, padding: '3px 10px', borderRadius: 99 }}>{sc.label}</span>
