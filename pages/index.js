@@ -1469,17 +1469,24 @@ function DashboardView({ items, lastUpdated, onNav }) {
   const sessionNames = { 3: 'Wednesday', 5: 'Friday', 0: 'Sunday' }
 
   function nextSession() {
-    const todayIdx = now.getDay()
-    const todayHour = now.getHours()
-    // find next session day (today counts if before 4:30pm)
+    // Use Brisbane timezone explicitly to avoid UTC/SSR issues
+    const tz = 'Australia/Brisbane'
+    const todayIdx = parseInt(new Intl.DateTimeFormat('en-AU', { timeZone: tz, weekday: 'short' }).format(now) === 'Sun' ? 0
+      : new Intl.DateTimeFormat('en-AU', { timeZone: tz, weekday: 'short' }).format(now) === 'Mon' ? 1
+      : new Intl.DateTimeFormat('en-AU', { timeZone: tz, weekday: 'short' }).format(now) === 'Tue' ? 2
+      : new Intl.DateTimeFormat('en-AU', { timeZone: tz, weekday: 'short' }).format(now) === 'Wed' ? 3
+      : new Intl.DateTimeFormat('en-AU', { timeZone: tz, weekday: 'short' }).format(now) === 'Thu' ? 4
+      : new Intl.DateTimeFormat('en-AU', { timeZone: tz, weekday: 'short' }).format(now) === 'Fri' ? 5
+      : 6)
+    const todayHour = parseInt(new Intl.DateTimeFormat('en-AU', { timeZone: tz, hour: 'numeric', hour12: false }).format(now))
     for (let offset = 0; offset <= 7; offset++) {
       const dayIdx = (todayIdx + offset) % 7
       if (sessionDays.includes(dayIdx)) {
-        if (offset === 0 && todayHour >= 18) continue // session over today
+        if (offset === 0 && todayHour >= 18) continue // session over for today
         const d = new Date(now)
         d.setDate(d.getDate() + offset)
         const label = offset === 0 ? 'Today' : offset === 1 ? 'Tomorrow' : sessionNames[dayIdx]
-        return { label, date: d.toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'short' }), isToday: offset === 0 }
+        return { label, date: d.toLocaleDateString('en-AU', { timeZone: tz, weekday: 'long', day: 'numeric', month: 'short' }), isToday: offset === 0 }
       }
     }
     return null
