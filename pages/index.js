@@ -1248,8 +1248,15 @@ function WastageView({ items, log, readOnly, onRefresh }) {
   const [saving, setSaving]   = useState(false)
   const [filter, setFilter]   = useState('All')
   const [showForm, setShowForm] = useState(false)
+  const [dateFrom, setDateFrom] = useState('')
+  const [dateTo, setDateTo]     = useState('')
 
-  const filtered = filter === 'All' ? log : log.filter(e => e.reason === filter)
+  const filtered = log.filter(e => {
+    if (filter !== 'All' && e.reason !== filter) return false
+    if (dateFrom && new Date(e.date) < new Date(dateFrom + 'T00:00:00+10:00')) return false
+    if (dateTo   && new Date(e.date) > new Date(dateTo   + 'T23:59:59+10:00')) return false
+    return true
+  })
 
   // Summary by reason
   const summary = REASONS.map(r => ({
@@ -1445,14 +1452,28 @@ function WastageView({ items, log, readOnly, onRefresh }) {
 
       {/* Log table */}
       <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #e2e8f0', overflow: 'hidden' }}>
-        <div style={{ background: '#1e3a5f', color: '#fff', padding: '10px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div style={{ background: '#1e3a5f', color: '#fff', padding: '10px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
           <span style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.07em' }}>
             {filter === 'All' ? 'All Entries' : filter} — {filtered.length} records
           </span>
-          <button onClick={printReport}
-            style={{ fontSize: 11, background: '#0e7490', border: 'none', borderRadius: 6, padding: '5px 12px', cursor: 'pointer', color: '#fff', fontWeight: 600 }}>
-            🖨️ Print Report
-          </button>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+              <span style={{ fontSize: 11, color: '#93c5fd' }}>From</span>
+              <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)}
+                style={{ padding: '4px 8px', borderRadius: 6, border: 'none', fontSize: 12, background: '#1e40af', color: '#fff', colorScheme: 'dark' }} />
+              <span style={{ fontSize: 11, color: '#93c5fd' }}>To</span>
+              <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)}
+                style={{ padding: '4px 8px', borderRadius: 6, border: 'none', fontSize: 12, background: '#1e40af', color: '#fff', colorScheme: 'dark' }} />
+              {(dateFrom || dateTo) && (
+                <button onClick={() => { setDateFrom(''); setDateTo('') }}
+                  style={{ fontSize: 11, background: '#475569', border: 'none', borderRadius: 6, padding: '4px 8px', cursor: 'pointer', color: '#fff' }}>✕ Clear</button>
+              )}
+            </div>
+            <button onClick={printReport}
+              style={{ fontSize: 11, background: '#0e7490', border: 'none', borderRadius: 6, padding: '5px 12px', cursor: 'pointer', color: '#fff', fontWeight: 600 }}>
+              🖨️ Print Report
+            </button>
+          </div>
         </div>
         {filtered.length === 0 ? (
           <div style={{ padding: 32, textAlign: 'center', color: '#94a3b8', fontSize: 13 }}>
