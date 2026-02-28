@@ -54,6 +54,8 @@ export default function Home() {
   const [trendLoading, setTrendLoading] = useState(false)
   const [trendError, setTrendError]     = useState(null)
   const [sellersData, setSellersData]   = useState(null)
+  const [poList, setPoList]             = useState([])
+  const [poView, setPoView]             = useState(null)   // null=list, po object=detail
   const [sellersLoading, setSellersLoading] = useState(false)
   const [sellersError, setSellersError] = useState(null)
   const [priceListSettings, setPriceListSettings] = useState({}) // { itemName: { hidden: bool, priceOverride: num, label: str } }
@@ -157,6 +159,14 @@ export default function Home() {
     } finally {
       setSalesLoading(false)
     }
+  }
+
+  async function loadPurchaseOrders() {
+    try {
+      const r = await fetch('/api/purchase-orders')
+      const data = await r.json()
+      setPoList(data.orders || [])
+    } catch(e) { console.error('PO load error', e) }
   }
 
   async function loadSellersData() {
@@ -914,7 +924,7 @@ ${orderItems.length === 0 ? '<p style="color:#6b7280;margin-top:16px">No items t
                 {readOnly && <span style={{ fontSize: 10, background: '#fef9c3', color: '#854d0e', border: '1px solid #fde68a', borderRadius: 4, padding: '2px 7px', fontWeight: 700, letterSpacing: '0.05em' }}>READ ONLY</span>}
                 <span style={styles.logoSub}>GemLife Palmwoods</span>
               </div>
-              <h1 style={styles.title}>{mainTab === 'sales' ? 'Sales Report' : mainTab === 'trends' ? 'Quarterly Trends' : mainTab === 'help' ? 'Help & Guide' : mainTab === 'pricelist' ? 'Price List' : mainTab === 'bestsellers' ? 'Best & Worst Sellers' : mainTab === 'home' ? 'Dashboard' : 'Reorder Planner'}</h1>
+              <h1 style={styles.title}>{mainTab === 'sales' ? 'Sales Report' : mainTab === 'trends' ? 'Quarterly Trends' : mainTab === 'help' ? 'Help & Guide' : mainTab === 'pricelist' ? 'Price List' : mainTab === 'bestsellers' ? 'Best & Worst Sellers' : mainTab === 'home' ? 'Dashboard' : mainTab === 'orders' ? 'Purchase Orders' : 'Reorder Planner'}</h1>
             </div>
             <div style={styles.headerRight}>
               {lastUpdated && <span style={styles.lastUpdated}>Updated {new Date(lastUpdated).toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit' })}</span>}
@@ -949,6 +959,10 @@ ${orderItems.length === 0 ? '<p style="color:#6b7280;margin-top:16px">No items t
                 <button style={{ ...styles.btn, background: '#0f766e' }}
                   onClick={() => window.open('https://paynter-bar-roster.vercel.app/', '_blank')}>
                   👥 Roster
+                </button>
+                <button style={{ ...styles.btn, background: mainTab === 'orders' ? '#0369a1' : '#0c4a6e' }}
+                  onClick={() => { const next = mainTab === 'orders' ? 'reorder' : 'orders'; setMainTab(next); if (next === 'orders') loadPurchaseOrders() }}>
+                  {mainTab === 'orders' ? '← Back' : '🛒 Orders'}
                 </button>
                 <button style={{ ...styles.btn, background: mainTab === 'help' ? '#1e293b' : '#475569' }}
                   onClick={() => setMainTab(t => t === 'help' ? 'reorder' : 'help')}>
@@ -1198,6 +1212,16 @@ ${orderItems.length === 0 ? '<p style="color:#6b7280;margin-top:16px">No items t
         )}
         {mainTab === 'trends' && <TrendsView data={trendData} loading={trendLoading} error={trendError} />}
         {mainTab === 'bestsellers' && <BestSellersView items={items} salesData={sellersData} loading={sellersLoading} error={sellersError} />}
+        {mainTab === 'orders' && (
+          <PurchaseOrdersView
+            items={items}
+            poList={poList}
+            poView={poView}
+            setPoView={setPoView}
+            readOnly={readOnly}
+            onRefresh={loadPurchaseOrders}
+          />
+        )}
         {mainTab === 'pricelist' && (
           <PriceListView
             items={items}
@@ -1217,6 +1241,425 @@ ${orderItems.length === 0 ? '<p style="color:#6b7280;margin-top:16px">No items t
     </>
   )
 }
+
+// ─── PURCHASE ORDERS VIEW ─────────────────────────────────────────────────────
+function PurchaseOrdersView({ items, poList, poView, setPoView, readOnly, onRefresh }) {
+  const [creating, setCreating]     = React.useState(false)
+  const [saving, setSaving]         = React.useState(false)
+  const [receiving, setReceiving]   = React.useState({})   // itemName -> receivedQty
+
+  const STATUS_COLOR = {
+    DRAFT:     { bg: '#f1f5f9', text: '#475569', label: 'Draft' },
+    SENT:      { bg: '#eff6ff', text: '#2563eb', label: 'Sent' },
+    RECEIVED:  { bg: '#dcfce7', text: '#16a34a', label: 'Received' },
+    CANCELLED: { bg: '#fee2e2', text: '#dc2626', label: 'Cancelled' },
+  }
+
+  // ── Create PO from Reorder Planner data ───────────────────────────────────
+  const SUPPLIERS = [...new Set(items.map(i => i.supplier).filter(Boolean))]
+  const [selectedSupplier, setSelectedSupplier] = React.useState(SUPPLIERS[0] || '')
+  const [poNotes, setPoNotes] = React.useState('')
+
+  const supplierItems = items.filter(i =>
+    i.supplier === selectedSupplier && i.orderQty > 0
+  )
+
+  async function createPO() {
+    if (!supplierItems.length) return alert('No items to order for this supplier')
+    setSaving(true)
+    try {
+      const r = await fetch('/api/purchase-orders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          supplier: selectedSupplier,
+          notes: poNotes,
+          items: supplierItems.map(i => ({
+            name:     i.name,
+            category: i.category,
+            orderQty: i.isSpirit ? i.bottlesToOrder : i.orderQty,
+            unit:     i.isSpirit ? 'bottles' : 'units',
+            buyPrice: i.buyPrice || null,
+          }))
+        })
+      })
+      const data = await r.json()
+      if (!r.ok) throw new Error(data.error)
+      await onRefresh()
+      setCreating(false)
+      setPoNotes('')
+      setPoView(data.order)
+    } catch(e) { alert('Error: ' + e.message) }
+    finally { setSaving(false) }
+  }
+
+  async function updateStatus(po, status) {
+    const r = await fetch(`/api/purchase-orders?id=${po.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status })
+    })
+    const data = await r.json()
+    if (r.ok) { await onRefresh(); setPoView(data.order) }
+  }
+
+  async function saveReceived(po) {
+    setSaving(true)
+    try {
+      const updatedItems = po.items.map(i => ({
+        ...i,
+        receivedQty: receiving[i.name] !== undefined ? Number(receiving[i.name]) : i.orderQty
+      }))
+      const r = await fetch(`/api/purchase-orders?id=${po.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ items: updatedItems, status: 'RECEIVED', receivedAt: Date.now() })
+      })
+      const data = await r.json()
+      if (r.ok) { await onRefresh(); setPoView(data.order); setReceiving({}) }
+    } catch(e) { alert('Error: ' + e.message) }
+    finally { setSaving(false) }
+  }
+
+  async function deletePO(po) {
+    if (!confirm(`Delete ${po.id}? This cannot be undone.`)) return
+    await fetch(`/api/purchase-orders?id=${po.id}`, { method: 'DELETE' })
+    await onRefresh()
+    setPoView(null)
+  }
+
+  // ── Print delivery docket ──────────────────────────────────────────────────
+  function printDocket(po) {
+    const rows = po.items.map(i => `
+      <tr>
+        <td style="padding:8px 12px;border-bottom:1px solid #e2e8f0;font-size:13px">${i.name}</td>
+        <td style="padding:8px 12px;border-bottom:1px solid #e2e8f0;text-align:center;font-size:13px">${i.category}</td>
+        <td style="padding:8px 12px;border-bottom:1px solid #e2e8f0;text-align:center;font-weight:700;font-size:14px">${i.orderQty} ${i.unit}</td>
+        <td style="padding:8px 12px;border-bottom:1px solid #e2e8f0;text-align:center;width:80px">
+          <div style="border:2px solid #94a3b8;border-radius:4px;height:28px;width:60px;margin:0 auto"></div>
+        </td>
+      </tr>`).join('')
+
+    const html = `<!DOCTYPE html><html><head>
+      <title>Delivery Docket – ${po.supplier}</title>
+      <style>
+        @page { size: A4 portrait; margin: 15mm }
+        body { font-family: Arial, sans-serif; color: #0f172a; }
+        h1 { font-size: 20px; margin: 0 0 4px }
+        .meta { font-size: 12px; color: #64748b; margin-bottom: 16px }
+        table { width: 100%; border-collapse: collapse; }
+        th { background: #1e3a5f; color: #fff; padding: 8px 12px; text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em }
+        th.center { text-align: center }
+        .footer { margin-top: 24px; font-size: 11px; color: #94a3b8; border-top: 1px solid #e2e8f0; padding-top: 12px }
+        .sig { margin-top: 32px; display: flex; gap: 40px }
+        .sig-block { flex: 1 }
+        .sig-line { border-bottom: 1px solid #0f172a; margin-bottom: 4px; height: 32px }
+        .sig-label { font-size: 11px; color: #64748b }
+      </style>
+    </head><body>
+      <h1>📦 Delivery Docket</h1>
+      <div class="meta">
+        <strong>${po.supplier}</strong> &nbsp;·&nbsp;
+        PO: ${po.id} &nbsp;·&nbsp;
+        Ordered: ${new Date(po.createdAt).toLocaleDateString('en-AU', { day:'numeric', month:'short', year:'numeric' })}
+        ${po.notes ? `<br>Notes: ${po.notes}` : ''}
+      </div>
+      <table>
+        <thead><tr>
+          <th>Item</th>
+          <th class="center">Category</th>
+          <th class="center">Ordered</th>
+          <th class="center">Received ✓</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+      <div class="sig">
+        <div class="sig-block"><div class="sig-line"></div><div class="sig-label">Received by</div></div>
+        <div class="sig-block"><div class="sig-line"></div><div class="sig-label">Date received</div></div>
+        <div class="sig-block"><div class="sig-line"></div><div class="sig-label">Invoice #</div></div>
+      </div>
+      <div class="footer">Paynter Bar · GemLife Palmwoods · Generated ${new Date().toLocaleString('en-AU')}</div>
+    </body></html>`
+
+    const w = window.open('', '_blank')
+    w.document.write(html)
+    w.document.close()
+    setTimeout(() => w.print(), 600)
+  }
+
+  // ── Print treasurer report ─────────────────────────────────────────────────
+  function printTreasurerReport(po) {
+    const totalOrdered  = po.items.reduce((s,i) => s + (i.buyPrice ? i.orderQty * i.buyPrice : 0), 0)
+    const totalReceived = po.items.reduce((s,i) => s + (i.buyPrice ? (i.receivedQty ?? i.orderQty) * i.buyPrice : 0), 0)
+
+    const rows = po.items.map(i => {
+      const rec = i.receivedQty ?? i.orderQty
+      const variance = rec - i.orderQty
+      const varStyle = variance < 0 ? 'color:#dc2626' : variance > 0 ? 'color:#2563eb' : 'color:#16a34a'
+      const cost = i.buyPrice ? `$${(rec * i.buyPrice).toFixed(2)}` : '—'
+      return `<tr>
+        <td style="padding:7px 10px;border-bottom:1px solid #f1f5f9;font-size:12px">${i.name}</td>
+        <td style="padding:7px 10px;border-bottom:1px solid #f1f5f9;text-align:center;font-size:12px">${i.category}</td>
+        <td style="padding:7px 10px;border-bottom:1px solid #f1f5f9;text-align:center;font-size:12px">${i.orderQty} ${i.unit}</td>
+        <td style="padding:7px 10px;border-bottom:1px solid #f1f5f9;text-align:center;font-size:12px">${rec} ${i.unit}</td>
+        <td style="padding:7px 10px;border-bottom:1px solid #f1f5f9;text-align:center;font-size:12px;${varStyle}">${variance === 0 ? '✓' : variance > 0 ? `+${variance}` : variance}</td>
+        <td style="padding:7px 10px;border-bottom:1px solid #f1f5f9;text-align:right;font-size:12px;font-weight:600">${cost}</td>
+      </tr>`}).join('')
+
+    const html = `<!DOCTYPE html><html><head>
+      <title>Delivery Report – ${po.supplier}</title>
+      <style>
+        @page { size: A4 portrait; margin: 15mm }
+        body { font-family: Arial, sans-serif; color: #0f172a; }
+        h1 { font-size: 18px; margin: 0 0 4px }
+        .meta { font-size: 11px; color: #64748b; margin-bottom: 16px; line-height: 1.8 }
+        table { width: 100%; border-collapse: collapse; }
+        th { background: #1e3a5f; color: #fff; padding: 7px 10px; font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em }
+        th.r { text-align: right } th.c { text-align: center }
+        .total { margin-top: 12px; text-align: right; font-size: 13px }
+        .total strong { font-size: 16px; color: #0f172a }
+        .footer { margin-top: 20px; font-size: 10px; color: #94a3b8; border-top: 1px solid #e2e8f0; padding-top: 10px }
+        .badge { display:inline-block; background:#dcfce7; color:#16a34a; font-size:10px; font-weight:700; padding:2px 8px; border-radius:99px; margin-left:8px }
+      </style>
+    </head><body>
+      <h1>📋 Delivery Receipt Report <span class="badge">RECEIVED</span></h1>
+      <div class="meta">
+        <strong>Supplier:</strong> ${po.supplier}<br>
+        <strong>PO Reference:</strong> ${po.id}<br>
+        <strong>Order Date:</strong> ${new Date(po.createdAt).toLocaleDateString('en-AU', { day:'numeric', month:'long', year:'numeric' })}<br>
+        <strong>Received:</strong> ${po.receivedAt ? new Date(po.receivedAt).toLocaleDateString('en-AU', { day:'numeric', month:'long', year:'numeric' }) : 'N/A'}<br>
+        ${po.notes ? `<strong>Notes:</strong> ${po.notes}` : ''}
+      </div>
+      <table>
+        <thead><tr>
+          <th>Item</th><th class="c">Category</th><th class="c">Ordered</th>
+          <th class="c">Received</th><th class="c">Variance</th><th class="r">Cost</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+      ${totalReceived > 0 ? `<div class="total">Total Cost: <strong>$${totalReceived.toFixed(2)}</strong></div>` : ''}
+      <div class="footer">
+        Paynter Bar · GemLife Palmwoods · Report generated ${new Date().toLocaleString('en-AU')}<br>
+        Please attach this report to the supplier invoice and forward to the Treasurer.
+      </div>
+    </body></html>`
+
+    const w = window.open('', '_blank')
+    w.document.write(html)
+    w.document.close()
+    setTimeout(() => w.print(), 600)
+  }
+
+  // ── PO Detail view ─────────────────────────────────────────────────────────
+  if (poView) {
+    const po = poList.find(o => o.id === poView.id) || poView
+    const sc = STATUS_COLOR[po.status] || STATUS_COLOR.DRAFT
+    const isReceived = po.status === 'RECEIVED'
+
+    return (
+      <div style={{ padding: '24px 32px', maxWidth: 900, margin: '0 auto' }}>
+        {/* Header */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20, flexWrap: 'wrap', gap: 10 }}>
+          <div>
+            <button onClick={() => setPoView(null)} style={{ background: 'none', border: 'none', color: '#2563eb', cursor: 'pointer', fontSize: 13, padding: 0, marginBottom: 6 }}>← Back to orders</button>
+            <h2 style={{ fontSize: 18, fontWeight: 700, color: '#0f172a', margin: 0 }}>{po.supplier}</h2>
+            <div style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>
+              {po.id} · Created {new Date(po.createdAt).toLocaleDateString('en-AU', { day:'numeric', month:'short', year:'numeric' })}
+              {po.notes && ` · ${po.notes}`}
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+            <span style={{ background: sc.bg, color: sc.text, fontWeight: 700, fontSize: 11, padding: '4px 12px', borderRadius: 99 }}>{sc.label}</span>
+            <button onClick={() => printDocket(po)} style={{ ...styles.btn, background: '#0e7490' }}>🖨️ Docket</button>
+            {isReceived && <button onClick={() => printTreasurerReport(po)} style={{ ...styles.btn, background: '#065f46' }}>📋 Treasurer Report</button>}
+            {!readOnly && po.status === 'DRAFT' && <button onClick={() => updateStatus(po, 'SENT')} style={{ ...styles.btn, background: '#2563eb' }}>Mark Sent</button>}
+            {!readOnly && po.status === 'SENT'  && <button onClick={() => updateStatus(po, 'DRAFT')} style={{ ...styles.btn, background: '#475569' }}>Back to Draft</button>}
+            {!readOnly && po.status !== 'RECEIVED' && po.status !== 'CANCELLED' && (
+              <button onClick={() => updateStatus(po, 'CANCELLED')} style={{ ...styles.btn, background: '#dc2626' }}>Cancel</button>
+            )}
+            {!readOnly && po.status === 'DRAFT' && (
+              <button onClick={() => deletePO(po)} style={{ ...styles.btn, background: '#991b1b' }}>Delete</button>
+            )}
+          </div>
+        </div>
+
+        {/* Items table */}
+        <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #e2e8f0', overflow: 'hidden', marginBottom: 20 }}>
+          <div style={{ background: '#1e3a5f', color: '#fff', padding: '10px 16px', fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.07em' }}>
+            Order Items — {po.items.length} lines
+          </div>
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <thead>
+              <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
+                <th style={{ padding: '7px 14px', textAlign: 'left', fontSize: 10, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Item</th>
+                <th style={{ padding: '7px 14px', textAlign: 'center', fontSize: 10, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Category</th>
+                <th style={{ padding: '7px 14px', textAlign: 'center', fontSize: 10, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Ordered</th>
+                {!isReceived && po.status === 'SENT' && !readOnly && (
+                  <th style={{ padding: '7px 14px', textAlign: 'center', fontSize: 10, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Received</th>
+                )}
+                {isReceived && <th style={{ padding: '7px 14px', textAlign: 'center', fontSize: 10, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Received</th>}
+                {isReceived && <th style={{ padding: '7px 14px', textAlign: 'center', fontSize: 10, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Variance</th>}
+              </tr>
+            </thead>
+            <tbody>
+              {po.items.map((item, idx) => {
+                const rec = item.receivedQty
+                const variance = rec != null ? rec - item.orderQty : null
+                return (
+                  <tr key={item.name} style={{ background: idx % 2 === 0 ? '#fff' : '#f8fafc', borderBottom: '1px solid #f1f5f9' }}>
+                    <td style={{ padding: '8px 14px', fontSize: 13, fontWeight: 600, color: '#0f172a' }}>{item.name}</td>
+                    <td style={{ padding: '8px 14px', textAlign: 'center', fontSize: 11, color: '#64748b' }}>{item.category}</td>
+                    <td style={{ padding: '8px 14px', textAlign: 'center', fontSize: 13, fontWeight: 700, fontFamily: 'monospace' }}>{item.orderQty} <span style={{ fontSize: 10, color: '#94a3b8' }}>{item.unit}</span></td>
+                    {!isReceived && po.status === 'SENT' && !readOnly && (
+                      <td style={{ padding: '6px 14px', textAlign: 'center' }}>
+                        <input
+                          type="number" min="0"
+                          defaultValue={item.orderQty}
+                          onChange={e => setReceiving(r => ({ ...r, [item.name]: e.target.value }))}
+                          style={{ width: 70, textAlign: 'center', padding: '4px 8px', border: '1px solid #e2e8f0', borderRadius: 6, fontSize: 13, fontFamily: 'monospace' }}
+                        />
+                      </td>
+                    )}
+                    {isReceived && (
+                      <td style={{ padding: '8px 14px', textAlign: 'center', fontSize: 13, fontWeight: 700, fontFamily: 'monospace', color: variance < 0 ? '#dc2626' : '#16a34a' }}>
+                        {rec} <span style={{ fontSize: 10, color: '#94a3b8' }}>{item.unit}</span>
+                      </td>
+                    )}
+                    {isReceived && (
+                      <td style={{ padding: '8px 14px', textAlign: 'center', fontSize: 12, fontWeight: 700, color: variance === 0 ? '#16a34a' : variance > 0 ? '#2563eb' : '#dc2626' }}>
+                        {variance === 0 ? '✓' : variance > 0 ? `+${variance}` : variance}
+                      </td>
+                    )}
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Mark received button */}
+        {!readOnly && po.status === 'SENT' && (
+          <div style={{ background: '#f0fdf4', border: '1px solid #86efac', borderRadius: 10, padding: '14px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 700, color: '#15803d' }}>Ready to mark delivery received?</div>
+              <div style={{ fontSize: 11, color: '#16a34a', marginTop: 2 }}>Edit quantities above if anything was short-delivered, then click Mark Received.</div>
+            </div>
+            <button onClick={() => saveReceived(po)} disabled={saving}
+              style={{ ...styles.btn, background: '#16a34a', opacity: saving ? 0.6 : 1 }}>
+              {saving ? 'Saving...' : '✓ Mark Received'}
+            </button>
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  // ── List view ──────────────────────────────────────────────────────────────
+  return (
+    <div style={{ padding: '24px 32px', maxWidth: 900, margin: '0 auto' }}>
+
+      {/* Create new PO */}
+      {!readOnly && (
+        <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #e2e8f0', marginBottom: 20, overflow: 'hidden' }}>
+          <div
+            style={{ background: '#0c4a6e', color: '#fff', padding: '10px 16px', fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.07em', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+            onClick={() => setCreating(c => !c)}>
+            ➕ Create New Purchase Order
+            <span style={{ fontSize: 16 }}>{creating ? '▲' : '▼'}</span>
+          </div>
+          {creating && (
+            <div style={{ padding: '16px 20px' }}>
+              <div style={{ display: 'flex', gap: 12, alignItems: 'flex-end', flexWrap: 'wrap', marginBottom: 14 }}>
+                <div>
+                  <div style={{ fontSize: 11, color: '#64748b', marginBottom: 4 }}>Supplier</div>
+                  <select value={selectedSupplier} onChange={e => setSelectedSupplier(e.target.value)}
+                    style={{ padding: '7px 12px', border: '1px solid #e2e8f0', borderRadius: 6, fontSize: 13 }}>
+                    {SUPPLIERS.map(s => <option key={s} value={s}>{s}</option>)}
+                  </select>
+                </div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 11, color: '#64748b', marginBottom: 4 }}>Notes (optional)</div>
+                  <input value={poNotes} onChange={e => setPoNotes(e.target.value)} placeholder="e.g. Regular weekly order"
+                    style={{ width: '100%', padding: '7px 12px', border: '1px solid #e2e8f0', borderRadius: 6, fontSize: 13, boxSizing: 'border-box' }} />
+                </div>
+                <button onClick={createPO} disabled={saving || !supplierItems.length}
+                  style={{ ...styles.btn, background: supplierItems.length ? '#0369a1' : '#94a3b8', opacity: saving ? 0.6 : 1 }}>
+                  {saving ? 'Creating...' : `Create PO (${supplierItems.length} items)`}
+                </button>
+              </div>
+              {supplierItems.length > 0 ? (
+                <div style={{ background: '#f8fafc', borderRadius: 8, padding: '10px 14px' }}>
+                  <div style={{ fontSize: 11, color: '#64748b', marginBottom: 6, fontWeight: 600 }}>Items to order from {selectedSupplier}:</div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                    {supplierItems.map(i => (
+                      <span key={i.name} style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 6, padding: '3px 10px', fontSize: 11, color: '#0f172a' }}>
+                        {i.name} <strong>{i.isSpirit ? i.bottlesToOrder : i.orderQty}</strong> {i.isSpirit ? 'btl' : 'units'}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <div style={{ fontSize: 12, color: '#94a3b8', padding: '8px 0' }}>
+                  No items need ordering from {selectedSupplier} right now.
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* PO List */}
+      <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #e2e8f0', overflow: 'hidden' }}>
+        <div style={{ background: '#1e3a5f', color: '#fff', padding: '10px 16px', fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.07em' }}>
+          Purchase Orders — {poList.length} total
+        </div>
+        {poList.length === 0 ? (
+          <div style={{ padding: 32, textAlign: 'center', color: '#94a3b8', fontSize: 13 }}>
+            No purchase orders yet. Create one above from the Reorder Planner.
+          </div>
+        ) : (
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <thead>
+              <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
+                {['PO Reference','Supplier','Date','Items','Status',''].map(h => (
+                  <th key={h} style={{ padding: '7px 14px', textAlign: h === '' ? 'center' : 'left', fontSize: 10, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {poList.map((po, idx) => {
+                const sc = STATUS_COLOR[po.status] || STATUS_COLOR.DRAFT
+                return (
+                  <tr key={po.id} style={{ background: idx % 2 === 0 ? '#fff' : '#f8fafc', borderBottom: '1px solid #f1f5f9', cursor: 'pointer' }}
+                    onClick={() => setPoView(po)}>
+                    <td style={{ padding: '9px 14px', fontSize: 12, fontFamily: 'monospace', color: '#475569' }}>{po.id}</td>
+                    <td style={{ padding: '9px 14px', fontSize: 13, fontWeight: 600, color: '#0f172a' }}>{po.supplier}</td>
+                    <td style={{ padding: '9px 14px', fontSize: 12, color: '#64748b' }}>{new Date(po.createdAt).toLocaleDateString('en-AU', { day:'numeric', month:'short', year:'numeric' })}</td>
+                    <td style={{ padding: '9px 14px', fontSize: 12, color: '#64748b' }}>{po.items.length} lines</td>
+                    <td style={{ padding: '9px 14px' }}>
+                      <span style={{ background: sc.bg, color: sc.text, fontWeight: 700, fontSize: 11, padding: '3px 10px', borderRadius: 99 }}>{sc.label}</span>
+                    </td>
+                    <td style={{ padding: '9px 14px', textAlign: 'center' }}>
+                      <button onClick={e => { e.stopPropagation(); printDocket(po) }}
+                        style={{ fontSize: 11, background: '#f1f5f9', border: 'none', borderRadius: 6, padding: '4px 10px', cursor: 'pointer', color: '#475569' }}>
+                        🖨️ Docket
+                      </button>
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        )}
+      </div>
+
+      <div style={{ marginTop: 14, fontSize: 11, color: '#94a3b8', textAlign: 'center' }}>
+        Purchase orders are stored in the cloud and visible to all management team members · 🔒 Beta feature
+      </div>
+    </div>
+  )
+}
+
 
 // ─── DASHBOARD VIEW ───────────────────────────────────────────────────────────
 function DashboardView({ items, lastUpdated, onNav }) {
@@ -1240,6 +1683,7 @@ function DashboardView({ items, lastUpdated, onNav }) {
     { icon: '🏆', label: 'Best & Worst Sellers',  desc: 'Top 10, slow sellers and items not moving',        tab: 'bestsellers',  color: '#92400e' },
     { icon: '🏷️', label: 'Price List',            desc: 'Printable A4 price list for bar display',          tab: 'pricelist',    color: '#be185d' },
     { icon: '👥', label: 'Volunteer Roster',      desc: 'Volunteer scheduling (opens new tab)',             tab: 'roster',       color: '#065f46', external: true },
+    { icon: '🛒', label: 'Purchase Orders',        desc: 'Create, track and receipt supplier orders',       tab: 'orders',       color: '#0369a1' },
     { icon: '❓', label: 'Help & Guide',           desc: 'Full documentation for all features',             tab: 'help',         color: '#475569' },
   ]
 
