@@ -1525,11 +1525,7 @@ function DashboardView({ items, lastUpdated, onNav }) {
             <span style={{ fontSize: 11, color: '#93c5fd' }}>Data from Square POS · {totalItems} items tracked</span>
           </div>
         </div>
-        <div style={{ textAlign: 'right' }}>
-          <div style={{ fontSize: 11, color: '#93c5fd', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 4 }}>Next Bar Session</div>
-          <div style={{ fontSize: 18, fontWeight: 700 }}>{next?.label || '—'}</div>
-          <div style={{ fontSize: 12, color: '#bfdbfe' }}>4:30 – 6:30 PM</div>
-        </div>
+
       </div>
 
       {/* Live stats strip */}
