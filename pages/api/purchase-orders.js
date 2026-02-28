@@ -2,7 +2,9 @@ import { kvGet, kvSet } from '../../lib/redis'
 
 function generateId(orders, supplier) {
   const d = new Date()
-  const date = `${String(d.getDate()).padStart(2,'0')}${String(d.getMonth()+1).padStart(2,'0')}${d.getFullYear()}`
+  const brisbane = new Intl.DateTimeFormat('en-AU', { timeZone: 'Australia/Brisbane', day: '2-digit', month: '2-digit', year: 'numeric' }).format(d)
+  const [day, month, year] = brisbane.split('/')
+  const date = `${day}${month}${year}`
   // Custom abbreviations for known suppliers
   const ABBR = {
     'dan murphys':    'Dans',
