@@ -2,7 +2,7 @@ const BASE_URL = 'https://connect.squareup.com/v2'
 
 async function getLocationId(token) {
   const r = await fetch(`${BASE_URL}/locations`, {
-    headers: { 'Authorization': `Bearer ${token}`, 'Square-Version': '2024-01-17' }
+    headers: { 'Authorization': `Bearer ${token}`, 'Square-Version': '2025-03-19' }
   })
   const data = await r.json()
   const active = (data.locations || []).filter(l => l.status === 'ACTIVE')
@@ -17,7 +17,7 @@ export default async function handler(req, res) {
   const headers = {
     'Authorization': `Bearer ${token}`,
     'Content-Type': 'application/json',
-    'Square-Version': '2024-01-17',
+    'Square-Version': '2025-03-19',
   }
 
   try {
