@@ -1244,9 +1244,9 @@ ${orderItems.length === 0 ? '<p style="color:#6b7280;margin-top:16px">No items t
 
 // ─── PURCHASE ORDERS VIEW ─────────────────────────────────────────────────────
 function PurchaseOrdersView({ items, poList, poView, setPoView, readOnly, onRefresh }) {
-  const [creating, setCreating]     = React.useState(false)
-  const [saving, setSaving]         = React.useState(false)
-  const [receiving, setReceiving]   = React.useState({})   // itemName -> receivedQty
+  const [creating, setCreating]     = useState(false)
+  const [saving, setSaving]         = useState(false)
+  const [receiving, setReceiving]   = useState({})   // itemName -> receivedQty
 
   const STATUS_COLOR = {
     DRAFT:     { bg: '#f1f5f9', text: '#475569', label: 'Draft' },
@@ -1257,8 +1257,8 @@ function PurchaseOrdersView({ items, poList, poView, setPoView, readOnly, onRefr
 
   // ── Create PO from Reorder Planner data ───────────────────────────────────
   const SUPPLIERS = [...new Set(items.map(i => i.supplier).filter(Boolean))]
-  const [selectedSupplier, setSelectedSupplier] = React.useState(SUPPLIERS[0] || '')
-  const [poNotes, setPoNotes] = React.useState('')
+  const [selectedSupplier, setSelectedSupplier] = useState(SUPPLIERS[0] || '')
+  const [poNotes, setPoNotes] = useState('')
 
   const supplierItems = items.filter(i =>
     i.supplier === selectedSupplier && i.orderQty > 0
