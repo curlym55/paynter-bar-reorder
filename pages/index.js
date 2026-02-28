@@ -54,6 +54,8 @@ export default function Home() {
   const [trendLoading, setTrendLoading] = useState(false)
   const [trendError, setTrendError]     = useState(null)
   const [sellersData, setSellersData]   = useState(null)
+  const [wastageLog, setWastageLog]     = useState([])
+  const [wastageLoaded, setWastageLoaded] = useState(false)
   const [sellersLoading, setSellersLoading] = useState(false)
   const [sellersError, setSellersError] = useState(null)
   const [priceListSettings, setPriceListSettings] = useState({}) // { itemName: { hidden: bool, priceOverride: num, label: str } }
@@ -157,6 +159,15 @@ export default function Home() {
     } finally {
       setSalesLoading(false)
     }
+  }
+
+  async function loadWastageLog() {
+    try {
+      const r = await fetch('/api/wastage')
+      const data = await r.json()
+      setWastageLog(data.entries || [])
+      setWastageLoaded(true)
+    } catch(e) { console.error('Wastage load error', e) }
   }
 
   async function loadSellersData() {
@@ -950,6 +961,10 @@ ${orderItems.length === 0 ? '<p style="color:#6b7280;margin-top:16px">No items t
                   onClick={() => window.open('https://paynter-bar-roster.vercel.app/', '_blank')}>
                   👥 Roster
                 </button>
+                <button style={{ ...styles.btn, background: mainTab === 'wastage' ? '#b45309' : '#92400e' }}
+                  onClick={() => { const next = mainTab === 'wastage' ? 'reorder' : 'wastage'; setMainTab(next); if (next === 'wastage' && !wastageLoaded) loadWastageLog() }}>
+                  {mainTab === 'wastage' ? '← Back' : '🗑️ Wastage'}
+                </button>
                 <button style={{ ...styles.btn, background: mainTab === 'help' ? '#1e293b' : '#475569' }}
                   onClick={() => setMainTab(t => t === 'help' ? 'reorder' : 'help')}>
                   {mainTab === 'help' ? '← Back' : '❓ Help'}
@@ -1197,6 +1212,7 @@ ${orderItems.length === 0 ? '<p style="color:#6b7280;margin-top:16px">No items t
           />
         )}
         {mainTab === 'trends' && <TrendsView data={trendData} loading={trendLoading} error={trendError} />}
+        {mainTab === 'wastage' && <WastageView items={items} log={wastageLog} readOnly={readOnly} onRefresh={loadWastageLog} />}
         {mainTab === 'bestsellers' && <BestSellersView items={items} salesData={sellersData} loading={sellersLoading} error={sellersError} />}
         {mainTab === 'pricelist' && (
           <PriceListView
@@ -1217,6 +1233,279 @@ ${orderItems.length === 0 ? '<p style="color:#6b7280;margin-top:16px">No items t
     </>
   )
 }
+
+// ─── WASTAGE LOG VIEW ─────────────────────────────────────────────────────────
+function WastageView({ items, log, readOnly, onRefresh }) {
+  const REASONS = ['Breakage', 'Spoilage', 'Expired', 'Other']
+  const REASON_COLOR = {
+    Breakage: { bg: '#fee2e2', text: '#dc2626' },
+    Spoilage: { bg: '#fef9c3', text: '#ca8a04' },
+    Expired:  { bg: '#ffedd5', text: '#ea580c' },
+    Other:    { bg: '#f1f5f9', text: '#475569' },
+  }
+
+  const [form, setForm]       = useState({ itemName: '', qty: '', unit: 'units', reason: 'Breakage', note: '', recordedBy: '' })
+  const [saving, setSaving]   = useState(false)
+  const [filter, setFilter]   = useState('All')
+  const [showForm, setShowForm] = useState(false)
+
+  const filtered = filter === 'All' ? log : log.filter(e => e.reason === filter)
+
+  // Summary by reason
+  const summary = REASONS.map(r => ({
+    reason: r,
+    count: log.filter(e => e.reason === r).length,
+    ...REASON_COLOR[r]
+  }))
+
+  async function submit() {
+    if (!form.itemName || !form.qty) return alert('Please select an item and enter a quantity')
+    setSaving(true)
+    try {
+      const selected = items.find(i => i.name === form.itemName)
+      const r = await fetch('/api/wastage', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...form, category: selected?.category || '' })
+      })
+      if (!r.ok) throw new Error((await r.json()).error)
+      await onRefresh()
+      setForm({ itemName: '', qty: '', unit: 'units', reason: 'Breakage', note: '', recordedBy: '' })
+      setShowForm(false)
+    } catch(e) { alert('Error: ' + e.message) }
+    finally { setSaving(false) }
+  }
+
+  async function deleteEntry(id) {
+    if (!confirm('Delete this wastage entry?')) return
+    await fetch(`/api/wastage?id=${id}`, { method: 'DELETE' })
+    await onRefresh()
+  }
+
+  function printReport() {
+    const rows = filtered.map(e => `
+      <tr>
+        <td style="padding:7px 10px;border-bottom:1px solid #f1f5f9;font-size:12px">${new Date(e.date).toLocaleDateString('en-AU', { timeZone:'Australia/Brisbane', day:'numeric', month:'short', year:'numeric' })}</td>
+        <td style="padding:7px 10px;border-bottom:1px solid #f1f5f9;font-size:12px;font-weight:600">${e.itemName}</td>
+        <td style="padding:7px 10px;border-bottom:1px solid #f1f5f9;font-size:12px">${e.category}</td>
+        <td style="padding:7px 10px;border-bottom:1px solid #f1f5f9;text-align:center;font-size:12px;font-weight:700">${e.qty} ${e.unit}</td>
+        <td style="padding:7px 10px;border-bottom:1px solid #f1f5f9;font-size:12px">${e.reason}</td>
+        <td style="padding:7px 10px;border-bottom:1px solid #f1f5f9;font-size:12px;color:#64748b">${e.note || '—'}</td>
+        <td style="padding:7px 10px;border-bottom:1px solid #f1f5f9;font-size:12px;color:#64748b">${e.recordedBy || '—'}</td>
+      </tr>`).join('')
+
+    const summaryRows = REASONS.map(r => {
+      const entries = log.filter(e => e.reason === r)
+      return `<tr><td style="padding:5px 10px;font-size:12px">${r}</td><td style="padding:5px 10px;text-align:center;font-size:12px;font-weight:700">${entries.length}</td></tr>`
+    }).join('')
+
+    const html = `<!DOCTYPE html><html><head>
+      <title>Wastage Report — Paynter Bar</title>
+      <style>
+        @page { size: A4 portrait; margin: 15mm }
+        body { font-family: Arial, sans-serif; color: #0f172a; }
+        h1 { font-size: 18px; margin: 0 0 4px }
+        .meta { font-size: 11px; color: #64748b; margin-bottom: 16px }
+        table { width: 100%; border-collapse: collapse; margin-bottom: 20px }
+        th { background: #1e3a5f; color: #fff; padding: 7px 10px; font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; text-align: left }
+        th.c { text-align: center }
+        .summary { display: flex; gap: 16px; margin-bottom: 20px; flex-wrap: wrap }
+        .sum-card { border: 1px solid #e2e8f0; border-radius: 6px; padding: 8px 14px; min-width: 80px; text-align: center }
+        .footer { margin-top: 16px; font-size: 10px; color: #94a3b8; border-top: 1px solid #e2e8f0; padding-top: 10px }
+      </style>
+    </head><body>
+      <h1>🗑️ Wastage Log Report</h1>
+      <div class="meta">
+        Paynter Bar · GemLife Palmwoods<br>
+        Generated: ${new Date().toLocaleString('en-AU', { timeZone: 'Australia/Brisbane' })}<br>
+        Filter: ${filter} · ${filtered.length} entries
+      </div>
+      <div class="summary">
+        ${REASONS.map(r => {
+          const n = log.filter(e => e.reason === r).length
+          return `<div class="sum-card"><div style="font-size:11px;color:#64748b">${r}</div><div style="font-size:20px;font-weight:800">${n}</div></div>`
+        }).join('')}
+        <div class="sum-card"><div style="font-size:11px;color:#64748b">Total</div><div style="font-size:20px;font-weight:800">${log.length}</div></div>
+      </div>
+      <table>
+        <thead><tr>
+          <th>Date</th><th>Item</th><th>Category</th><th class="c">Qty</th>
+          <th>Reason</th><th>Note</th><th>Recorded By</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+      <div class="footer">Paynter Bar Hub · Wastage Log</div>
+    </body></html>`
+
+    const w = window.open('', '_blank')
+    w.document.write(html)
+    w.document.close()
+    setTimeout(() => w.print(), 600)
+  }
+
+  return (
+    <div style={{ padding: '24px 32px', maxWidth: 960, margin: '0 auto' }}>
+
+      {/* Summary strip */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 10, marginBottom: 20 }}>
+        {[...summary, { reason: 'Total', count: log.length, bg: '#f8fafc', text: '#0f172a' }].map(s => (
+          <div key={s.reason}
+            onClick={() => setFilter(s.reason === 'Total' ? 'All' : s.reason)}
+            style={{ background: s.bg, border: `1px solid ${s.text}33`, borderRadius: 8, padding: '10px 14px', cursor: 'pointer',
+              outline: filter === (s.reason === 'Total' ? 'All' : s.reason) ? `2px solid ${s.text}` : 'none' }}>
+            <div style={{ fontSize: 9, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 3 }}>{s.reason}</div>
+            <div style={{ fontSize: 24, fontWeight: 800, color: s.text, fontFamily: 'IBM Plex Mono, monospace', lineHeight: 1 }}>{s.count}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Log entry form */}
+      {!readOnly && (
+        <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #e2e8f0', marginBottom: 16, overflow: 'hidden' }}>
+          <div
+            style={{ background: '#92400e', color: '#fff', padding: '10px 16px', fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.07em', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+            onClick={() => setShowForm(f => !f)}>
+            🗑️ Record Wastage
+            <span style={{ fontSize: 16 }}>{showForm ? '▲' : '▼'}</span>
+          </div>
+          {showForm && (
+            <div style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+                {/* Item dropdown */}
+                <div style={{ flex: 2, minWidth: 200 }}>
+                  <div style={{ fontSize: 11, color: '#64748b', marginBottom: 4 }}>Item *</div>
+                  <select value={form.itemName} onChange={e => {
+                    const selected = items.find(i => i.name === e.target.value)
+                    setForm(f => ({ ...f, itemName: e.target.value, unit: selected?.isSpirit ? 'bottles' : 'units' }))
+                  }} style={{ width: '100%', padding: '7px 10px', border: '1px solid #e2e8f0', borderRadius: 6, fontSize: 13 }}>
+                    <option value="">— Select item —</option>
+                    {[...new Set(items.map(i => i.category))].filter(Boolean).sort().map(cat => (
+                      <optgroup key={cat} label={cat}>
+                        {items.filter(i => i.category === cat).sort((a,b) => a.name.localeCompare(b.name)).map(i => (
+                          <option key={i.name} value={i.name}>{i.name}</option>
+                        ))}
+                      </optgroup>
+                    ))}
+                  </select>
+                </div>
+                {/* Qty */}
+                <div style={{ width: 80 }}>
+                  <div style={{ fontSize: 11, color: '#64748b', marginBottom: 4 }}>Qty *</div>
+                  <input type="number" min="0.1" step="0.1" value={form.qty}
+                    onChange={e => setForm(f => ({ ...f, qty: e.target.value }))}
+                    style={{ width: '100%', padding: '7px 10px', border: '1px solid #e2e8f0', borderRadius: 6, fontSize: 13, textAlign: 'center', boxSizing: 'border-box' }} />
+                </div>
+                {/* Unit */}
+                <div style={{ width: 100 }}>
+                  <div style={{ fontSize: 11, color: '#64748b', marginBottom: 4 }}>Unit</div>
+                  <select value={form.unit} onChange={e => setForm(f => ({ ...f, unit: e.target.value }))}
+                    style={{ width: '100%', padding: '7px 10px', border: '1px solid #e2e8f0', borderRadius: 6, fontSize: 13 }}>
+                    <option>units</option>
+                    <option>bottles</option>
+                    <option>nips</option>
+                    <option>cases</option>
+                    <option>packs</option>
+                  </select>
+                </div>
+                {/* Reason */}
+                <div style={{ width: 130 }}>
+                  <div style={{ fontSize: 11, color: '#64748b', marginBottom: 4 }}>Reason *</div>
+                  <select value={form.reason} onChange={e => setForm(f => ({ ...f, reason: e.target.value }))}
+                    style={{ width: '100%', padding: '7px 10px', border: '1px solid #e2e8f0', borderRadius: 6, fontSize: 13 }}>
+                    {REASONS.map(r => <option key={r}>{r}</option>)}
+                  </select>
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+                {/* Note */}
+                <div style={{ flex: 2, minWidth: 200 }}>
+                  <div style={{ fontSize: 11, color: '#64748b', marginBottom: 4 }}>Note</div>
+                  <input value={form.note} onChange={e => setForm(f => ({ ...f, note: e.target.value }))}
+                    placeholder="e.g. Dropped on delivery, found in fridge"
+                    style={{ width: '100%', padding: '7px 10px', border: '1px solid #e2e8f0', borderRadius: 6, fontSize: 13, boxSizing: 'border-box' }} />
+                </div>
+                {/* Recorded by */}
+                <div style={{ width: 160 }}>
+                  <div style={{ fontSize: 11, color: '#64748b', marginBottom: 4 }}>Recorded by</div>
+                  <input value={form.recordedBy} onChange={e => setForm(f => ({ ...f, recordedBy: e.target.value }))}
+                    placeholder="Your name"
+                    style={{ width: '100%', padding: '7px 10px', border: '1px solid #e2e8f0', borderRadius: 6, fontSize: 13, boxSizing: 'border-box' }} />
+                </div>
+                <div style={{ display: 'flex', alignItems: 'flex-end' }}>
+                  <button onClick={submit} disabled={saving}
+                    style={{ ...styles.btn, background: '#92400e', opacity: saving ? 0.6 : 1 }}>
+                    {saving ? 'Saving...' : '✓ Record'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Log table */}
+      <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #e2e8f0', overflow: 'hidden' }}>
+        <div style={{ background: '#1e3a5f', color: '#fff', padding: '10px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.07em' }}>
+            {filter === 'All' ? 'All Entries' : filter} — {filtered.length} records
+          </span>
+          <button onClick={printReport}
+            style={{ fontSize: 11, background: '#0e7490', border: 'none', borderRadius: 6, padding: '5px 12px', cursor: 'pointer', color: '#fff', fontWeight: 600 }}>
+            🖨️ Print Report
+          </button>
+        </div>
+        {filtered.length === 0 ? (
+          <div style={{ padding: 32, textAlign: 'center', color: '#94a3b8', fontSize: 13 }}>
+            No wastage entries recorded yet.
+          </div>
+        ) : (
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <thead>
+              <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
+                {['Date','Item','Category','Qty','Reason','Note','By',''].map(h => (
+                  <th key={h} style={{ padding: '7px 12px', textAlign: h === 'Qty' ? 'center' : 'left', fontSize: 10, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map((entry, idx) => {
+                const rc = REASON_COLOR[entry.reason] || REASON_COLOR.Other
+                return (
+                  <tr key={entry.id} style={{ background: idx % 2 === 0 ? '#fff' : '#f8fafc', borderBottom: '1px solid #f1f5f9' }}>
+                    <td style={{ padding: '8px 12px', fontSize: 12, color: '#64748b', whiteSpace: 'nowrap' }}>
+                      {new Date(entry.date).toLocaleDateString('en-AU', { timeZone: 'Australia/Brisbane', day: 'numeric', month: 'short', year: 'numeric' })}
+                    </td>
+                    <td style={{ padding: '8px 12px', fontSize: 13, fontWeight: 600, color: '#0f172a' }}>{entry.itemName}</td>
+                    <td style={{ padding: '8px 12px', fontSize: 11, color: '#64748b' }}>{entry.category}</td>
+                    <td style={{ padding: '8px 12px', textAlign: 'center', fontSize: 13, fontWeight: 700, fontFamily: 'monospace' }}>
+                      {entry.qty} <span style={{ fontSize: 10, color: '#94a3b8' }}>{entry.unit}</span>
+                    </td>
+                    <td style={{ padding: '8px 12px' }}>
+                      <span style={{ background: rc.bg, color: rc.text, fontWeight: 700, fontSize: 11, padding: '2px 8px', borderRadius: 99 }}>{entry.reason}</span>
+                    </td>
+                    <td style={{ padding: '8px 12px', fontSize: 12, color: '#64748b', maxWidth: 200 }}>{entry.note || '—'}</td>
+                    <td style={{ padding: '8px 12px', fontSize: 12, color: '#64748b' }}>{entry.recordedBy || '—'}</td>
+                    <td style={{ padding: '8px 12px' }}>
+                      {!readOnly && (
+                        <button onClick={() => deleteEntry(entry.id)}
+                          style={{ fontSize: 11, background: '#fee2e2', border: 'none', borderRadius: 6, padding: '3px 8px', cursor: 'pointer', color: '#dc2626' }}>✕</button>
+                      )}
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        )}
+      </div>
+
+      <div style={{ marginTop: 14, fontSize: 11, color: '#cbd5e1', textAlign: 'center' }}>
+        Wastage records stored in the cloud · visible to all management team members
+      </div>
+    </div>
+  )
+}
+
 
 // ─── DASHBOARD VIEW ───────────────────────────────────────────────────────────
 function DashboardView({ items, lastUpdated, onNav }) {
@@ -1240,6 +1529,7 @@ function DashboardView({ items, lastUpdated, onNav }) {
     { icon: '🏆', label: 'Best & Worst Sellers',  desc: 'Top 10, slow sellers and items not moving',        tab: 'bestsellers',  color: '#92400e' },
     { icon: '🏷️', label: 'Price List',            desc: 'Printable A4 price list for bar display',          tab: 'pricelist',    color: '#be185d' },
     { icon: '👥', label: 'Volunteer Roster',      desc: 'Volunteer scheduling (opens new tab)',             tab: 'roster',       color: '#065f46', external: true },
+    { icon: '🗑️', label: 'Wastage Log',            desc: 'Record breakages, spoilage and expired stock',    tab: 'wastage',      color: '#92400e' },
     { icon: '❓', label: 'Help & Guide',           desc: 'Full documentation for all features',             tab: 'help',         color: '#475569' },
   ]
 
