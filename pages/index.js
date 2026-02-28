@@ -2221,6 +2221,21 @@ function HelpTab() {
         </p>
       </div>
 
+      {/* Procedures document download */}
+      <div style={{ background: 'linear-gradient(135deg, #1e3a5f 0%, #0e7490 100%)', borderRadius: 12, padding: '20px 24px', marginBottom: 24, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
+        <div>
+          <div style={{ fontSize: 15, fontWeight: 700, color: '#fff', marginBottom: 4 }}>📄 Stock Ordering & Inventory Procedures</div>
+          <div style={{ fontSize: 12, color: '#bfdbfe', lineHeight: 1.6 }}>
+            Complete procedures document — ordering, PO creation, invoice filing, goods receipt, History Report and wastage recording.
+          </div>
+        </div>
+        <button
+          onClick={() => window.open('REPLACE_WITH_ONEDRIVE_LINK', '_blank')}
+          style={{ background: '#fff', color: '#1e3a5f', border: 'none', borderRadius: 8, padding: '10px 20px', fontSize: 13, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0 }}>
+          📥 Download Word Doc
+        </button>
+      </div>
+
       {sections.map(section => (
         <div key={section.title} style={{ background: '#fff', borderRadius: 12, border: '1px solid #e2e8f0', marginBottom: 16, overflow: 'hidden' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '14px 20px', borderBottom: '1px solid #e2e8f0', background: '#f8fafc' }}>
