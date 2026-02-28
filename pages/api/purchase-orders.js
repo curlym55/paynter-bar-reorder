@@ -1,50 +1,68 @@
-const BASE_URL = 'https://connect.squareup.com/v2'
+import { kvGet, kvSet } from '../../lib/redis'
 
-async function getLocationId(token) {
-  const r = await fetch(`${BASE_URL}/locations`, {
-    headers: { 'Authorization': `Bearer ${token}`, 'Square-Version': '2025-03-19' }
-  })
-  const data = await r.json()
-  const active = (data.locations || []).filter(l => l.status === 'ACTIVE')
-  if (!active.length) throw new Error('No active Square locations found')
-  return active[0].id
+function generateId() {
+  return `PO-${Date.now()}-${Math.random().toString(36).slice(2,6).toUpperCase()}`
 }
 
 export default async function handler(req, res) {
-  const token = process.env.SQUARE_ACCESS_TOKEN
-  if (!token) return res.status(500).json({ error: 'SQUARE_ACCESS_TOKEN not configured' })
-
-  const headers = {
-    'Authorization': `Bearer ${token}`,
-    'Content-Type': 'application/json',
-    'Square-Version': '2025-03-19',
-  }
-
   try {
-    const locationId = await getLocationId(token)
+    const orders = (await kvGet('purchaseOrders').catch(() => null)) || []
 
     if (req.method === 'GET') {
-      // Try without location filter first to see what fields are accepted
-      const body = { limit: 20 }
-
-      const r = await fetch(`${BASE_URL}/purchase-orders/search`, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify(body),
-      })
-      const data = await r.json()
-
-      if (!r.ok) {
-        return res.status(r.status).json({
-          error: data.errors?.[0]?.detail || 'Square API error',
-          code:  data.errors?.[0]?.code,
-          raw:   data
-        })
+      // Return all or filter by status
+      const { status, id } = req.query
+      if (id) {
+        const order = orders.find(o => o.id === id)
+        if (!order) return res.status(404).json({ error: 'Not found' })
+        return res.json({ order })
       }
+      const filtered = status ? orders.filter(o => o.status === status) : orders
+      // Most recent first
+      return res.json({ orders: filtered.sort((a,b) => b.createdAt - a.createdAt) })
+    }
 
-      // Filter to this location client-side
-      const orders = (data.purchase_orders || []).filter(o => o.location_id === locationId)
-      return res.json({ orders, locationId, total: data.purchase_orders?.length, cursor: data.cursor || null })
+    if (req.method === 'POST') {
+      const { supplier, items, notes } = req.body
+      if (!supplier || !items?.length) return res.status(400).json({ error: 'supplier and items required' })
+      const po = {
+        id:        generateId(),
+        supplier,
+        status:    'DRAFT',     // DRAFT → SENT → RECEIVED
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+        notes:     notes || '',
+        items:     items.map(i => ({
+          name:        i.name,
+          category:    i.category || '',
+          orderQty:    i.orderQty,
+          unit:        i.unit || 'units',
+          buyPrice:    i.buyPrice || null,
+          receivedQty: null,   // filled in on receipt
+          notes:       '',
+        }))
+      }
+      orders.push(po)
+      await kvSet('purchaseOrders', orders)
+      return res.json({ order: po })
+    }
+
+    if (req.method === 'PUT') {
+      const { id } = req.query
+      if (!id) return res.status(400).json({ error: 'id required' })
+      const idx = orders.findIndex(o => o.id === id)
+      if (idx === -1) return res.status(404).json({ error: 'Not found' })
+      const updates = req.body
+      orders[idx] = { ...orders[idx], ...updates, id, updatedAt: Date.now() }
+      await kvSet('purchaseOrders', orders)
+      return res.json({ order: orders[idx] })
+    }
+
+    if (req.method === 'DELETE') {
+      const { id } = req.query
+      if (!id) return res.status(400).json({ error: 'id required' })
+      const filtered = orders.filter(o => o.id !== id)
+      await kvSet('purchaseOrders', filtered)
+      return res.json({ ok: true })
     }
 
     return res.status(405).json({ error: 'Method not allowed' })
