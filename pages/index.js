@@ -1457,120 +1457,73 @@ ${orderItems.length === 0 ? '<p style="color:#6b7280;margin-top:16px">No items t
 
 // ─── DASHBOARD VIEW ───────────────────────────────────────────────────────────
 function DashboardView({ items, lastUpdated, onNav }) {
-
   const critCount  = items.filter(i => i.priority === 'CRITICAL').length
   const lowCount   = items.filter(i => i.priority === 'LOW').length
   const orderCount = items.filter(i => i.orderQty > 0).length
   const totalItems = items.length
 
   const now = new Date()
-  const days = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday']
-  const sessionDays = [3, 5, 0] // Wed, Fri, Sun
-  const sessionNames = { 3: 'Wednesday', 5: 'Friday', 0: 'Sunday' }
-
-  function nextSession() {
-    // Use Brisbane timezone explicitly to avoid UTC/SSR issues
-    const tz = 'Australia/Brisbane'
-    const todayIdx = parseInt(new Intl.DateTimeFormat('en-AU', { timeZone: tz, weekday: 'short' }).format(now) === 'Sun' ? 0
-      : new Intl.DateTimeFormat('en-AU', { timeZone: tz, weekday: 'short' }).format(now) === 'Mon' ? 1
-      : new Intl.DateTimeFormat('en-AU', { timeZone: tz, weekday: 'short' }).format(now) === 'Tue' ? 2
-      : new Intl.DateTimeFormat('en-AU', { timeZone: tz, weekday: 'short' }).format(now) === 'Wed' ? 3
-      : new Intl.DateTimeFormat('en-AU', { timeZone: tz, weekday: 'short' }).format(now) === 'Thu' ? 4
-      : new Intl.DateTimeFormat('en-AU', { timeZone: tz, weekday: 'short' }).format(now) === 'Fri' ? 5
-      : 6)
-    const todayHour = parseInt(new Intl.DateTimeFormat('en-AU', { timeZone: tz, hour: 'numeric', hour12: false }).format(now))
-    for (let offset = 0; offset <= 7; offset++) {
-      const dayIdx = (todayIdx + offset) % 7
-      if (sessionDays.includes(dayIdx)) {
-        if (offset === 0 && todayHour >= 18) continue // session over for today
-        const d = new Date(now)
-        d.setDate(d.getDate() + offset)
-        const label = offset === 0 ? 'Today' : offset === 1 ? 'Tomorrow' : sessionNames[dayIdx]
-        return { label, date: d.toLocaleDateString('en-AU', { timeZone: tz, weekday: 'long', day: 'numeric', month: 'short' }), isToday: offset === 0 }
-      }
-    }
-    return null
-  }
-
-  const next = nextSession()
-
   const refreshedAgo = lastUpdated ? (() => {
-    const diffMs = now - new Date(lastUpdated)
-    const mins = Math.floor(diffMs / 60000)
+    const mins = Math.floor((now - new Date(lastUpdated)) / 60000)
     if (mins < 1) return 'just now'
     if (mins < 60) return `${mins}m ago`
-    const hrs = Math.floor(mins / 60)
-    return `${hrs}h ${mins % 60}m ago`
+    return `${Math.floor(mins/60)}h ${mins%60}m ago`
   })() : 'Not yet refreshed'
 
   const features = [
-    { icon: '📦', label: 'Reorder Planner', desc: 'Live stock levels, order quantities and supplier sheets', tab: 'reorder', color: '#1e3a5f' },
-    { icon: '📊', label: 'Sales Report',    desc: 'Monthly and custom period sales with category breakdown', tab: 'sales',    color: '#7c3aed' },
-    { icon: '📈', label: 'Quarterly Trends',desc: 'Four-quarter category performance charts',               tab: 'trends',   color: '#0e7490' },
-    { icon: '🏆', label: 'Best & Worst Sellers', desc: 'Top 10, slow sellers and items not selling',        tab: 'bestsellers', color: '#92400e' },
-    { icon: '🏷️', label: 'Price List',      desc: 'Two-page A4 price list for bar display',                tab: 'pricelist', color: '#be185d' },
-    { icon: '❓', label: 'Help & Guide',    desc: 'Full documentation for all features',                    tab: 'help',     color: '#475569' },
-    { icon: '👥', label: 'Volunteer Roster', desc: 'Volunteer scheduling — opens in new tab',              tab: 'roster',   color: '#065f46', external: true },
+    { icon: '📦', label: 'Reorder Planner',     desc: 'Stock levels, order quantities & supplier sheets', tab: 'reorder',     color: '#1e3a5f' },
+    { icon: '📊', label: 'Sales Report',          desc: 'Period sales with category breakdown',             tab: 'sales',        color: '#7c3aed' },
+    { icon: '📈', label: 'Quarterly Trends',      desc: 'Four-quarter category performance charts',         tab: 'trends',       color: '#0e7490' },
+    { icon: '🏆', label: 'Best & Worst Sellers',  desc: 'Top 10, slow sellers and items not moving',        tab: 'bestsellers',  color: '#92400e' },
+    { icon: '🏷️', label: 'Price List',            desc: 'Printable A4 price list for bar display',          tab: 'pricelist',    color: '#be185d' },
+    { icon: '👥', label: 'Volunteer Roster',      desc: 'Volunteer scheduling (opens new tab)',             tab: 'roster',       color: '#065f46', external: true },
+    { icon: '❓', label: 'Help & Guide',           desc: 'Full documentation for all features',             tab: 'help',         color: '#475569' },
   ]
 
   return (
-    <div style={{ padding: '24px 32px', maxWidth: 1100, margin: '0 auto' }}>
+    <div style={{ padding: '20px 32px', maxWidth: 1100, margin: '0 auto' }}>
 
-      {/* Welcome banner */}
-      <div style={{ background: 'linear-gradient(135deg, #1e3a5f 0%, #0e7490 100%)', borderRadius: 14, padding: '24px 28px', marginBottom: 24, color: '#fff', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 16 }}>
-        <div>
-          <div style={{ fontSize: 22, fontWeight: 800, marginBottom: 4 }}>🍺 Paynter Bar Hub</div>
-          <div style={{ fontSize: 13, color: '#bfdbfe', lineHeight: 1.6 }}>
-            GemLife Palmwoods · Bar Management System<br />
-            <span style={{ fontSize: 11, color: '#93c5fd' }}>Data from Square POS · {totalItems} items tracked</span>
-          </div>
-        </div>
-
-      </div>
-
-      {/* Live stats strip */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 24 }}>
+      {/* Compact header row: stats + refresh */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 10, marginBottom: 20 }}>
         {[
-          { label: 'Critical Stock',   value: critCount,    sub: 'items below target',  color: '#dc2626', bg: '#fef2f2', icon: '🔴', action: () => onNav('reorder') },
-          { label: 'Low Stock',        value: lowCount,     sub: 'items running low',   color: '#d97706', bg: '#fffbeb', icon: '🟡', action: () => onNav('reorder') },
-          { label: 'Need Ordering',    value: orderCount,   sub: 'items to order now',  color: '#2563eb', bg: '#eff6ff', icon: '📋', action: () => onNav('reorder') },
-          { label: 'Last Refreshed',   value: refreshedAgo, sub: 'Square data updated', color: '#64748b', bg: '#f8fafc', icon: '🔄', action: null },
-        ].map(({ label, value, sub, color, bg, icon, action }) => (
+          { label: 'Critical',      value: critCount,    sub: 'below target',    color: '#dc2626', bg: '#fef2f2', action: () => onNav('reorder') },
+          { label: 'Low Stock',     value: lowCount,     sub: 'running low',     color: '#d97706', bg: '#fffbeb', action: () => onNav('reorder') },
+          { label: 'To Order',      value: orderCount,   sub: 'need ordering',   color: '#2563eb', bg: '#eff6ff', action: () => onNav('reorder') },
+          { label: 'Refreshed',     value: refreshedAgo, sub: 'Square data',     color: '#475569', bg: '#f8fafc', action: null },
+        ].map(({ label, value, sub, color, bg, action }) => (
           <div key={label}
             onClick={action || undefined}
-            style={{ background: bg, borderRadius: 10, border: `1px solid ${color}22`, padding: '14px 18px', cursor: action ? 'pointer' : 'default', transition: 'box-shadow 0.15s' }}
-            onMouseEnter={e => { if (action) e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.1)' }}
-            onMouseLeave={e => { e.currentTarget.style.boxShadow = 'none' }}>
-            <div style={{ fontSize: 10, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 6 }}>{icon} {label}</div>
-            <div style={{ fontSize: 26, fontWeight: 800, color, fontFamily: 'IBM Plex Mono, monospace', lineHeight: 1 }}>{value}</div>
-            <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 4 }}>{sub}</div>
+            style={{ background: bg, borderRadius: 8, border: `1px solid ${color}33`, padding: '10px 14px', cursor: action ? 'pointer' : 'default' }}
+            onMouseEnter={e => { if (action) e.currentTarget.style.opacity = '0.85' }}
+            onMouseLeave={e => { e.currentTarget.style.opacity = '1' }}>
+            <div style={{ fontSize: 9, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 3 }}>{label}</div>
+            <div style={{ fontSize: 22, fontWeight: 800, color, fontFamily: 'IBM Plex Mono, monospace', lineHeight: 1 }}>{value}</div>
+            <div style={{ fontSize: 10, color: '#94a3b8', marginTop: 2 }}>{sub}</div>
           </div>
         ))}
       </div>
 
-      {/* Feature grid */}
-      <div style={{ fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 12 }}>Features</div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
+      {/* Feature grid — 4 columns */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
         {features.map(f => (
           <div key={f.tab}
             onClick={() => f.external ? window.open('https://paynter-bar-roster.vercel.app/', '_blank') : onNav(f.tab)}
-            style={{ background: '#fff', borderRadius: 10, border: '1px solid #e2e8f0', padding: '16px 18px', cursor: 'pointer', display: 'flex', alignItems: 'flex-start', gap: 14, transition: 'box-shadow 0.15s, border-color 0.15s' }}
-            onMouseEnter={e => { e.currentTarget.style.boxShadow = '0 4px 16px rgba(0,0,0,0.08)'; e.currentTarget.style.borderColor = f.color }}
-            onMouseLeave={e => { e.currentTarget.style.boxShadow = 'none'; e.currentTarget.style.borderColor = '#e2e8f0' }}>
-            <div style={{ width: 40, height: 40, borderRadius: 10, background: f.color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, flexShrink: 0 }}>
+            style={{ background: '#fff', borderRadius: 8, border: '1px solid #e2e8f0', padding: '12px 14px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 12, transition: 'border-color 0.15s, box-shadow 0.15s' }}
+            onMouseEnter={e => { e.currentTarget.style.borderColor = f.color; e.currentTarget.style.boxShadow = '0 2px 10px rgba(0,0,0,0.07)' }}
+            onMouseLeave={e => { e.currentTarget.style.borderColor = '#e2e8f0'; e.currentTarget.style.boxShadow = 'none' }}>
+            <div style={{ width: 36, height: 36, borderRadius: 8, background: f.color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, flexShrink: 0 }}>
               {f.icon}
             </div>
-            <div>
-              <div style={{ fontSize: 13, fontWeight: 700, color: '#0f172a', marginBottom: 3 }}>{f.label}{f.external ? ' ↗' : ''}</div>
-              <div style={{ fontSize: 11, color: '#64748b', lineHeight: 1.5 }}>{f.desc}</div>
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: '#0f172a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{f.label}{f.external ? ' ↗' : ''}</div>
+              <div style={{ fontSize: 10, color: '#94a3b8', marginTop: 1, lineHeight: 1.4 }}>{f.desc}</div>
             </div>
           </div>
         ))}
       </div>
 
-      {/* Footer note */}
-      <div style={{ marginTop: 20, fontSize: 11, color: '#94a3b8', textAlign: 'center' }}>
-        Paynter Bar Hub · GemLife Palmwoods · Built for the Bar Management Team
+      <div style={{ marginTop: 14, fontSize: 10, color: '#cbd5e1', textAlign: 'center' }}>
+        Paynter Bar Hub · GemLife Palmwoods · {totalItems} items tracked
       </div>
     </div>
   )
