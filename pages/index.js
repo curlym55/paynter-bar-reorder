@@ -2230,7 +2230,7 @@ function HelpTab() {
           </div>
         </div>
         <button
-          onClick={() => window.open('REPLACE_WITH_ONEDRIVE_LINK', '_blank')}
+          onClick={() => window.open('https://netorgft13493683-my.sharepoint.com/:w:/r/personal/paynterbar_gemwoods_com_au/_layouts/15/Doc.aspx?sourcedoc=%7B9AE00960-19BA-419D-AFF0-C07BFB559313%7D&file=PaynterHubProcedures.docx&action=default&mobileredirect=true', '_blank')}
           style={{ background: '#fff', color: '#1e3a5f', border: 'none', borderRadius: 8, padding: '10px 20px', fontSize: 13, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0 }}>
           📥 Download Word Doc
         </button>
