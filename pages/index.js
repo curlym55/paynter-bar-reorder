@@ -1750,6 +1750,16 @@ function TrendsView({ data, loading, error }) {
 function HelpTab() {
   const sections = [
     {
+      icon: '🏠',
+      title: 'Dashboard',
+      items: [
+        { q: 'Home screen', a: 'The Dashboard is the home screen of the app. It shows live stock status at a glance — Critical items, Low Stock, items needing ordering, and when data was last refreshed from Square.' },
+        { q: 'Stock status cards', a: 'The Critical, Low Stock and To Order cards are clickable — tap any of them to jump straight to the Reorder Planner filtered to those items.' },
+        { q: 'Feature tiles', a: 'All features of the app are accessible from the Dashboard via clickable tiles. The Volunteer Roster tile opens in a new tab.' },
+        { q: 'Refreshing data', a: 'Click Refresh in the top-right header to pull the latest stock levels, prices and sales data from Square POS. The Dashboard shows how long ago data was last refreshed.' },
+      ]
+    },
+    {
       icon: '🔐',
       title: 'Getting Started',
       items: [
@@ -1847,9 +1857,8 @@ function HelpTab() {
       title: 'Printing & Exports',
       items: [
         { q: 'Print Order Sheet', a: 'Click Print Order Sheet → choose a supplier to open a print-ready order form. Use your browser\'s Print dialog or Save as PDF.' },
-        { q: '📋 SOH PDF', a: 'Generates a Stock on Hand management report from current Square data — all items by category with status and order quantities. Print dialog opens automatically.' },
+        { q: '📋 SOH PDF', a: 'Generates a Stock on Hand report from current Square data — all items by category with status and order quantities. Print dialog opens automatically.' },
         { q: '📈 Sales PDF', a: 'Generates a Monthly Sales Report for the previous completed month — category breakdown, top 10 sellers, revenue and prior month comparisons. Best run on the 1st of each month.' },
-        
         { q: 'Export Stocktake', a: 'Downloads an Excel spreadsheet for quarterly stocktakes. Count columns for Cool Room, Store Room and Bar. For spirits, enter decimal bottles (e.g. 4.5) — the sheet calculates nips automatically and shows the variance against Square.' },
       ]
     },
@@ -1869,7 +1878,7 @@ function HelpTab() {
       items: [
         { q: 'Committee access', a: 'Full access to all features including editing item settings, categories, suppliers, pack sizes, bottle and nip sizes, buy prices, notes, target weeks, and price list visibility toggles. Can also export the stocktake spreadsheet and add suppliers.' },
         { q: 'Homeowners committee access', a: 'Read-only access. All data is visible — stock levels, order quantities, sales reports, trends, price list and PDF reports — but nothing can be edited. A READ ONLY badge appears in the header.' },
-        { q: 'What read-only users can view', a: 'Stock on hand, weekly averages, order quantities, item status, sales reports, quarterly trends, best & worst sellers, category breakdowns, price list, and all PDF reports including the AGM annual report.' },
+        { q: 'What read-only users can view', a: 'Stock on hand, weekly averages, order quantities, item status, sales reports, quarterly trends, best & worst sellers, category breakdowns, price list, SOH PDF and Sales PDF reports.' },
         { q: 'What read-only users cannot do', a: 'Edit any item settings, change prices, toggle price list visibility, export the stocktake spreadsheet, add suppliers, or change target weeks.' },
         { q: 'Pricing visibility', a: 'Buy prices and the $ Pricing view are only visible to committee members — hidden entirely for read-only users to keep cost prices confidential.' },
       ]
