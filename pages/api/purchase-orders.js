@@ -1,7 +1,20 @@
 import { kvGet, kvSet } from '../../lib/redis'
 
-function generateId() {
-  return `PO-${Date.now()}-${Math.random().toString(36).slice(2,6).toUpperCase()}`
+function generateId(orders, supplier) {
+  const d = new Date()
+  const date = `${String(d.getDate()).padStart(2,'0')}${String(d.getMonth()+1).padStart(2,'0')}${d.getFullYear()}`
+  // Custom abbreviations for known suppliers
+  const ABBR = {
+    'dan murphys':    'Dans',
+    'coles woolies':  'Cole',
+    'coles/woolies':  'Cole',
+    'acw':            'ACW',
+  }
+  const key = (supplier || '').toLowerCase().trim()
+  const abbr = ABBR[key] || (supplier || 'GEN').replace(/[^a-zA-Z]/g, '').slice(0, 4)
+  const nums = orders.map(o => parseInt((o.id || '').replace(/[^0-9]/, ''))).filter(n => !isNaN(n))
+  const next = nums.length ? Math.max(...nums) + 1 : 100
+  return `PO${next}-${abbr}-${date}`
 }
 
 export default async function handler(req, res) {
@@ -25,7 +38,7 @@ export default async function handler(req, res) {
       const { supplier, items, notes } = req.body
       if (!supplier || !items?.length) return res.status(400).json({ error: 'supplier and items required' })
       const po = {
-        id:        generateId(),
+        id:        generateId(orders, supplier),
         supplier,
         status:    'DRAFT',     // DRAFT → SENT → RECEIVED
         createdAt: Date.now(),
