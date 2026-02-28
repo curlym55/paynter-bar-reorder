@@ -1247,6 +1247,8 @@ function PurchaseOrdersView({ items, poList, poView, setPoView, readOnly, onRefr
   const [creating, setCreating]     = useState(false)
   const [saving, setSaving]         = useState(false)
   const [receiving, setReceiving]   = useState({})   // itemName -> receivedQty
+  const [addLine, setAddLine]       = useState({ name: '', qty: '', unit: 'units' })
+  const [addingLine, setAddingLine] = useState(false)
 
   const STATUS_COLOR = {
     DRAFT:     { bg: '#f1f5f9', text: '#475569', label: 'Draft' },
@@ -1319,6 +1321,37 @@ function PurchaseOrdersView({ items, poList, poView, setPoView, readOnly, onRefr
       if (r.ok) { await onRefresh(); setPoView(data.order); setReceiving({}) }
     } catch(e) { alert('Error: ' + e.message) }
     finally { setSaving(false) }
+  }
+
+  async function addExtraLine(po) {
+    if (!addLine.name.trim() || !addLine.qty) return
+    const updatedItems = [...po.items, {
+      name:        addLine.name.trim(),
+      category:    'Other',
+      orderQty:    Number(addLine.qty),
+      unit:        addLine.unit,
+      buyPrice:    null,
+      receivedQty: null,
+      notes:       '',
+    }]
+    const r = await fetch(`/api/purchase-orders?id=${po.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ items: updatedItems })
+    })
+    const data = await r.json()
+    if (r.ok) { await onRefresh(); setPoView(data.order); setAddLine({ name: '', qty: '', unit: 'units' }); setAddingLine(false) }
+  }
+
+  async function removeItem(po, itemName) {
+    const updatedItems = po.items.filter(i => i.name !== itemName)
+    const r = await fetch(`/api/purchase-orders?id=${po.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ items: updatedItems })
+    })
+    const data = await r.json()
+    if (r.ok) { await onRefresh(); setPoView(data.order) }
   }
 
   async function deletePO(po) {
@@ -1530,12 +1563,56 @@ function PurchaseOrdersView({ items, poList, poView, setPoView, readOnly, onRefr
                         {variance === 0 ? '✓' : variance > 0 ? `+${variance}` : variance}
                       </td>
                     )}
+                    {!isReceived && po.status === 'DRAFT' && !readOnly && (
+                      <td style={{ padding: '8px 14px', textAlign: 'center' }}>
+                        <button onClick={() => removeItem(po, item.name)}
+                          style={{ fontSize: 11, background: '#fee2e2', border: 'none', borderRadius: 6, padding: '3px 8px', cursor: 'pointer', color: '#dc2626' }}>✕</button>
+                      </td>
+                    )}
                   </tr>
                 )
               })}
             </tbody>
           </table>
         </div>
+
+        {/* Add extra line — Draft only */}
+        {!readOnly && po.status === 'DRAFT' && (
+          <div style={{ background: '#fff', borderRadius: 10, border: '1px solid #e2e8f0', padding: '12px 16px', marginBottom: 12 }}>
+            {!addingLine ? (
+              <button onClick={() => setAddingLine(true)}
+                style={{ background: 'none', border: '1px dashed #94a3b8', borderRadius: 6, padding: '6px 16px', fontSize: 12, color: '#64748b', cursor: 'pointer', width: '100%' }}>
+                ➕ Add extra item to order
+              </button>
+            ) : (
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                <input
+                  placeholder="Item name"
+                  value={addLine.name}
+                  onChange={e => setAddLine(l => ({ ...l, name: e.target.value }))}
+                  style={{ flex: 2, padding: '6px 10px', border: '1px solid #e2e8f0', borderRadius: 6, fontSize: 13, minWidth: 160 }}
+                />
+                <input
+                  type="number" min="1" placeholder="Qty"
+                  value={addLine.qty}
+                  onChange={e => setAddLine(l => ({ ...l, qty: e.target.value }))}
+                  style={{ width: 70, padding: '6px 10px', border: '1px solid #e2e8f0', borderRadius: 6, fontSize: 13, textAlign: 'center' }}
+                />
+                <select value={addLine.unit} onChange={e => setAddLine(l => ({ ...l, unit: e.target.value }))}
+                  style={{ padding: '6px 10px', border: '1px solid #e2e8f0', borderRadius: 6, fontSize: 13 }}>
+                  <option>units</option>
+                  <option>bottles</option>
+                  <option>cases</option>
+                  <option>packs</option>
+                </select>
+                <button onClick={() => addExtraLine(po)}
+                  style={{ ...styles.btn, background: '#0369a1' }}>Add</button>
+                <button onClick={() => { setAddingLine(false); setAddLine({ name: '', qty: '', unit: 'units' }) }}
+                  style={{ ...styles.btn, background: '#94a3b8' }}>Cancel</button>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Mark received button */}
         {!readOnly && po.status === 'SENT' && (
