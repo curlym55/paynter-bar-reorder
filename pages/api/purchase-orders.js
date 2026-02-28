@@ -24,10 +24,8 @@ export default async function handler(req, res) {
     const locationId = await getLocationId(token)
 
     if (req.method === 'GET') {
-      const body = { location_ids: [locationId], limit: 50 }
-      if (req.query.state) {
-        body.filter = { state_filter: { states: [req.query.state] } }
-      }
+      // Try without location filter first to see what fields are accepted
+      const body = { limit: 20 }
 
       const r = await fetch(`${BASE_URL}/purchase-orders/search`, {
         method: 'POST',
@@ -44,7 +42,9 @@ export default async function handler(req, res) {
         })
       }
 
-      return res.json({ orders: data.purchase_orders || [], cursor: data.cursor || null })
+      // Filter to this location client-side
+      const orders = (data.purchase_orders || []).filter(o => o.location_id === locationId)
+      return res.json({ orders, locationId, total: data.purchase_orders?.length, cursor: data.cursor || null })
     }
 
     return res.status(405).json({ error: 'Method not allowed' })
