@@ -1244,7 +1244,8 @@ function WastageView({ items, log, readOnly, onRefresh }) {
     Other:    { bg: '#f1f5f9', text: '#475569' },
   }
 
-  const [form, setForm]       = useState({ itemName: '', qty: '', unit: 'units', reason: 'Breakage', note: '', recordedBy: '' })
+  const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Australia/Brisbane' }) // YYYY-MM-DD
+  const [form, setForm]       = useState({ itemName: '', qty: '', unit: 'units', reason: 'Breakage', note: '', recordedBy: '', date: today })
   const [saving, setSaving]   = useState(false)
   const [filter, setFilter]   = useState('All')
   const [showForm, setShowForm] = useState(false)
@@ -1273,11 +1274,11 @@ function WastageView({ items, log, readOnly, onRefresh }) {
       const r = await fetch('/api/wastage', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...form, category: selected?.category || '' })
+        body: JSON.stringify({ ...form, category: selected?.category || '', date: form.date ? new Date(form.date + 'T12:00:00+10:00').getTime() : Date.now() })
       })
       if (!r.ok) throw new Error((await r.json()).error)
       await onRefresh()
-      setForm({ itemName: '', qty: '', unit: 'units', reason: 'Breakage', note: '', recordedBy: '' })
+      setForm({ itemName: '', qty: '', unit: 'units', reason: 'Breakage', note: '', recordedBy: '', date: today })
       setShowForm(false)
     } catch(e) { alert('Error: ' + e.message) }
     finally { setSaving(false) }
@@ -1421,6 +1422,13 @@ function WastageView({ items, log, readOnly, onRefresh }) {
                     style={{ width: '100%', padding: '7px 10px', border: '1px solid #e2e8f0', borderRadius: 6, fontSize: 13 }}>
                     {REASONS.map(r => <option key={r}>{r}</option>)}
                   </select>
+                </div>
+                {/* Date */}
+                <div style={{ width: 150 }}>
+                  <div style={{ fontSize: 11, color: '#64748b', marginBottom: 4 }}>Date *</div>
+                  <input type="date" value={form.date}
+                    onChange={e => setForm(f => ({ ...f, date: e.target.value }))}
+                    style={{ width: '100%', padding: '7px 10px', border: '1px solid #e2e8f0', borderRadius: 6, fontSize: 13, boxSizing: 'border-box' }} />
                 </div>
               </div>
               <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
