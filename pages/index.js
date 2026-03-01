@@ -55,6 +55,8 @@ export default function Home() {
   const [trendError, setTrendError]     = useState(null)
   const [sellersData, setSellersData]   = useState(null)
   const [wastageLog, setWastageLog]     = useState([])
+  const [notesLog, setNotesLog]         = useState([])
+  const [notesLoaded, setNotesLoaded]   = useState(false)
   const [wastageLoaded, setWastageLoaded] = useState(false)
   const [sellersLoading, setSellersLoading] = useState(false)
   const [sellersError, setSellersError] = useState(null)
@@ -129,6 +131,11 @@ export default function Home() {
         start = new Date(now.getFullYear(), now.getMonth(), 1)
         compareEnd   = new Date(start.getTime() - 1)
         compareStart = new Date(compareEnd.getFullYear(), compareEnd.getMonth(), 1)
+      } else if (period === 'lastmonth') {
+        end   = new Date(now.getFullYear(), now.getMonth(), 0); end.setHours(23,59,59,999)
+        start = new Date(end.getFullYear(), end.getMonth(), 1); start.setHours(0,0,0,0)
+        compareEnd   = new Date(start.getTime() - 1)
+        compareStart = new Date(compareEnd.getFullYear(), compareEnd.getMonth(), 1)
       } else if (period === '3months') {
         end   = new Date(now)
         start = new Date(now); start.setMonth(start.getMonth() - 3); start.setHours(0,0,0,0)
@@ -159,6 +166,15 @@ export default function Home() {
     } finally {
       setSalesLoading(false)
     }
+  }
+
+  async function loadNotes() {
+    try {
+      const r = await fetch('/api/notes')
+      const d = await r.json()
+      setNotesLog(d.notes || [])
+      setNotesLoaded(true)
+    } catch(e) { console.error(e) }
   }
 
   async function loadWastageLog() {
@@ -965,6 +981,10 @@ ${orderItems.length === 0 ? '<p style="color:#6b7280;margin-top:16px">No items t
                   onClick={() => { const next = mainTab === 'wastage' ? 'reorder' : 'wastage'; setMainTab(next); if (next === 'wastage' && !wastageLoaded) loadWastageLog() }}>
                   {mainTab === 'wastage' ? '← Back' : '🗑️ Wastage'}
                 </button>
+                <button style={{ ...styles.btn, background: mainTab === 'notes' ? '#5b21b6' : '#7c3aed' }}
+                  onClick={() => { const next = mainTab === 'notes' ? 'reorder' : 'notes'; setMainTab(next); if (next === 'notes' && !notesLoaded) loadNotes() }}>
+                  {mainTab === 'notes' ? '← Back' : '📝 Notes'}
+                </button>
                 <button style={{ ...styles.btn, background: mainTab === 'help' ? '#1e293b' : '#475569' }}
                   onClick={() => setMainTab(t => t === 'help' ? 'reorder' : 'help')}>
                   {mainTab === 'help' ? '← Back' : '❓ Help'}
@@ -1213,6 +1233,7 @@ ${orderItems.length === 0 ? '<p style="color:#6b7280;margin-top:16px">No items t
         )}
         {mainTab === 'trends' && <TrendsView data={trendData} loading={trendLoading} error={trendError} />}
         {mainTab === 'wastage' && <WastageView items={items} log={wastageLog} readOnly={readOnly} onRefresh={loadWastageLog} />}
+        {mainTab === 'notes' && <NotesView items={items} notes={notesLog} readOnly={readOnly} onRefresh={loadNotes} />}
         {mainTab === 'bestsellers' && <BestSellersView items={items} salesData={sellersData} loading={sellersLoading} error={sellersError} />}
         {mainTab === 'pricelist' && (
           <PriceListView
@@ -1820,7 +1841,7 @@ function isHidden(item) {
       {/* Toolbar */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#fff', border: '1px solid #e2e8f0', borderRadius: 10, padding: '14px 20px', marginBottom: 20 }}>
         <div>
-          <div style={{ fontSize: 14, fontWeight: 700, color: '#0f172a' }}>Price List Editor</div>
+          <div style={{ fontSize: 14, fontWeight: 700, color: '#0f172a' }}>Price List — From Square</div>
           <div style={{ fontSize: 11, color: '#64748b', marginTop: 2 }}>
             {visibleCount} items shown on price list · Prices from Square unless overridden
           </div>
@@ -1852,7 +1873,7 @@ function isHidden(item) {
                   <th style={{ padding: '7px 14px', textAlign: 'left', fontSize: 10, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 600 }}>Display Name</th>
                   <th style={{ padding: '7px 14px', textAlign: 'left', fontSize: 10, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 600 }}>Square Name</th>
                   <th style={{ padding: '7px 14px', textAlign: 'right', fontSize: 10, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 600 }}>Price</th>
-                  <th style={{ padding: '7px 14px', textAlign: 'center', fontSize: 10, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 600 }}>On List</th>
+
                 </tr>
               </thead>
               <tbody>
@@ -1900,19 +1921,7 @@ function isHidden(item) {
                         })()}
                       </td>
 
-                      {/* Show/hide toggle */}
-                      <td style={{ padding: '7px 14px', textAlign: 'center' }}>
-                        {readOnly ? (
-                          <span style={{ fontSize: 11, color: hidden ? '#dc2626' : '#16a34a' }}>{hidden ? 'Hidden' : 'Shown'}</span>
-                        ) : (
-                          <button
-                            style={{ fontSize: 11, fontWeight: 600, padding: '3px 10px', borderRadius: 99, border: 'none', cursor: 'pointer',
-                              background: hidden ? '#fee2e2' : '#dcfce7', color: hidden ? '#dc2626' : '#16a34a' }}
-                            onClick={() => onSave(item.name, 'hidden', !hidden)}>
-                            {hidden ? 'Hidden' : 'Shown'}
-                          </button>
-                        )}
-                      </td>
+
                     </tr>
                   )
                 })}
@@ -2065,6 +2074,163 @@ function TrendsView({ data, loading, error }) {
 }
 
 
+// ─── NOTES VIEW ────────────────────────────────────────────────────────────────
+function NotesView({ items, notes, readOnly, onRefresh }) {
+  const [form, setForm]       = useState({ noteDate: '', itemName: '', comment: '', author: '' })
+  const [saving, setSaving]   = useState(false)
+  const [filterFrom, setFilterFrom] = useState('')
+  const [filterTo, setFilterTo]     = useState('')
+  const [showForm, setShowForm]     = useState(false)
+
+  // Default date to today Brisbane time
+  const todayBrisbane = new Date().toLocaleDateString('en-CA', { timeZone: 'Australia/Brisbane' })
+  const ef = (f, v) => setForm(p => ({ ...p, [f]: v }))
+
+  async function saveNote() {
+    if (!form.comment.trim()) return
+    setSaving(true)
+    try {
+      await fetch('/api/notes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...form, noteDate: form.noteDate || todayBrisbane })
+      })
+      setForm({ noteDate: '', itemName: '', comment: '', author: '' })
+      setShowForm(false)
+      onRefresh()
+    } catch(e) { alert('Save failed') }
+    setSaving(false)
+  }
+
+  async function deleteNote(id) {
+    if (!confirm('Delete this note?')) return
+    await fetch(`/api/notes?id=${id}`, { method: 'DELETE' })
+    onRefresh()
+  }
+
+  const filtered = notes.filter(n => {
+    if (filterFrom && n.noteDate < filterFrom) return false
+    if (filterTo   && n.noteDate > filterTo)   return false
+    return true
+  })
+
+  const itemNames = [...new Set((items || []).map(i => i.name))].sort()
+
+  return (
+    <div style={{ padding: 32, maxWidth: 1000, margin: '0 auto' }}>
+      {/* Header bar */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24, gap: 16, flexWrap: 'wrap' }}>
+        <div>
+          <div style={{ fontSize: 22, fontWeight: 800, color: '#0f172a' }}>📝 Notes</div>
+          <div style={{ fontSize: 13, color: '#64748b', marginTop: 2 }}>Bar observations, stock notes and general comments</div>
+        </div>
+        {!readOnly && (
+          <button onClick={() => setShowForm(s => !s)}
+            style={{ background: '#7c3aed', color: '#fff', border: 'none', borderRadius: 8, padding: '10px 20px', fontSize: 14, fontWeight: 700, cursor: 'pointer' }}>
+            {showForm ? '✕ Cancel' : '+ Add Note'}
+          </button>
+        )}
+      </div>
+
+      {/* Add note form */}
+      {showForm && !readOnly && (
+        <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, padding: 24, marginBottom: 24 }}>
+          <div style={{ fontSize: 14, fontWeight: 700, color: '#0f172a', marginBottom: 16 }}>New Note</div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
+            <div>
+              <label style={{ fontSize: 11, fontWeight: 600, color: '#64748b', display: 'block', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Date</label>
+              <input type="date" value={form.noteDate || todayBrisbane} onChange={e => ef('noteDate', e.target.value)}
+                style={{ width: '100%', padding: '8px 12px', border: '1px solid #e2e8f0', borderRadius: 8, fontSize: 14, boxSizing: 'border-box' }} />
+            </div>
+            <div>
+              <label style={{ fontSize: 11, fontWeight: 600, color: '#64748b', display: 'block', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Item (optional)</label>
+              <select value={form.itemName} onChange={e => ef('itemName', e.target.value)}
+                style={{ width: '100%', padding: '8px 12px', border: '1px solid #e2e8f0', borderRadius: 8, fontSize: 14, boxSizing: 'border-box', background: '#fff' }}>
+                <option value="">— General note —</option>
+                {itemNames.map(n => <option key={n} value={n}>{n}</option>)}
+              </select>
+            </div>
+          </div>
+          <div style={{ marginBottom: 16 }}>
+            <label style={{ fontSize: 11, fontWeight: 600, color: '#64748b', display: 'block', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Comment *</label>
+            <textarea value={form.comment} onChange={e => ef('comment', e.target.value)} rows={3}
+              placeholder="Enter your note or observation..."
+              style={{ width: '100%', padding: '8px 12px', border: '1px solid #e2e8f0', borderRadius: 8, fontSize: 14, boxSizing: 'border-box', resize: 'vertical', fontFamily: 'inherit' }} />
+          </div>
+          <div style={{ display: 'flex', gap: 16, alignItems: 'flex-end' }}>
+            <div style={{ flex: 1 }}>
+              <label style={{ fontSize: 11, fontWeight: 600, color: '#64748b', display: 'block', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Author</label>
+              <input type="text" value={form.author} onChange={e => ef('author', e.target.value)} placeholder="Your name"
+                style={{ width: '100%', padding: '8px 12px', border: '1px solid #e2e8f0', borderRadius: 8, fontSize: 14, boxSizing: 'border-box' }} />
+            </div>
+            <button onClick={saveNote} disabled={saving || !form.comment.trim()}
+              style={{ background: saving || !form.comment.trim() ? '#94a3b8' : '#7c3aed', color: '#fff', border: 'none', borderRadius: 8,
+                padding: '10px 24px', fontSize: 14, fontWeight: 700, cursor: saving || !form.comment.trim() ? 'not-allowed' : 'pointer', whiteSpace: 'nowrap' }}>
+              {saving ? 'Saving...' : '✓ Save Note'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Date filter */}
+      <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 10, padding: '12px 20px', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+        <span style={{ fontSize: 12, fontWeight: 600, color: '#64748b' }}>Filter:</span>
+        <input type="date" value={filterFrom} onChange={e => setFilterFrom(e.target.value)}
+          style={{ padding: '6px 10px', border: '1px solid #e2e8f0', borderRadius: 6, fontSize: 13 }} />
+        <span style={{ fontSize: 12, color: '#94a3b8' }}>to</span>
+        <input type="date" value={filterTo} onChange={e => setFilterTo(e.target.value)}
+          style={{ padding: '6px 10px', border: '1px solid #e2e8f0', borderRadius: 6, fontSize: 13 }} />
+        {(filterFrom || filterTo) && (
+          <button onClick={() => { setFilterFrom(''); setFilterTo('') }}
+            style={{ fontSize: 12, color: '#64748b', background: '#f1f5f9', border: '1px solid #e2e8f0', borderRadius: 6, padding: '4px 10px', cursor: 'pointer' }}>
+            ✕ Clear
+          </button>
+        )}
+        <span style={{ marginLeft: 'auto', fontSize: 12, color: '#94a3b8' }}>{filtered.length} note{filtered.length !== 1 ? 's' : ''}</span>
+      </div>
+
+      {/* Notes list */}
+      {filtered.length === 0 ? (
+        <div style={{ textAlign: 'center', padding: '48px 0', color: '#94a3b8' }}>
+          <div style={{ fontSize: 36, marginBottom: 12 }}>📝</div>
+          <div style={{ fontSize: 14 }}>{notes.length === 0 ? 'No notes yet. Add the first one above.' : 'No notes match the selected date range.'}</div>
+        </div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          {filtered.map(n => (
+            <div key={n.id} style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 10, padding: '16px 20px', position: 'relative' }}>
+              <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
+                <div style={{ flex: 1 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8, flexWrap: 'wrap' }}>
+                    <span style={{ fontSize: 12, fontWeight: 700, color: '#7c3aed', background: '#f5f3ff', padding: '3px 10px', borderRadius: 99 }}>
+                      {new Date(n.noteDate + 'T12:00:00').toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' })}
+                    </span>
+                    {n.itemName && (
+                      <span style={{ fontSize: 12, fontWeight: 600, color: '#0e7490', background: '#ecfeff', padding: '3px 10px', borderRadius: 99 }}>
+                        {n.itemName}
+                      </span>
+                    )}
+                    {n.author && (
+                      <span style={{ fontSize: 11, color: '#94a3b8' }}>— {n.author}</span>
+                    )}
+                  </div>
+                  <div style={{ fontSize: 14, color: '#0f172a', lineHeight: 1.6 }}>{n.comment}</div>
+                </div>
+                {!readOnly && (
+                  <button onClick={() => deleteNote(n.id)}
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#cbd5e1', fontSize: 16, padding: '0 4px', flexShrink: 0 }}
+                    title="Delete note">✕</button>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+
 // ─── HELP TAB ─────────────────────────────────────────────────────────────────
 function HelpTab() {
   const sections = [
@@ -2125,7 +2291,7 @@ function HelpTab() {
       title: 'Sales Report',
       items: [
         { q: 'Opening the report', a: 'Click 📊 Sales Report in the top-right header. Data is fetched live from Square\'s Orders API — allow a few seconds to load.' },
-        { q: 'Period selector', a: 'Choose This Month, Last 3 Months, or a Custom date range. Each period automatically compares against the equivalent prior period.' },
+        { q: 'Period selector', a: 'Choose This Month, Last Month, Last 3 Months, or a Custom date range. Each period automatically compares against the equivalent prior period.' },
         { q: 'Category breakdown', a: 'Click any category tile to filter the item table to just that category. Click again (or ALL) to reset.' },
         { q: 'Revenue figures', a: 'Revenue comes directly from Square\'s transaction records — the actual price charged at time of sale, not a calculation from current prices.' },
         { q: 'Sort order', a: 'Toggle between By Units and By Revenue using the buttons above the item table.' },
@@ -2300,7 +2466,7 @@ function SalesView({ period, setPeriod, custom, setCustom, report, loading, erro
     <div style={{ padding: '24px 32px' }}>
       {/* Period controls */}
       <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', marginBottom: 12, background: '#fff', padding: '10px 20px', borderBottom: '1px solid #e2e8f0' }}>
-        {[['month','This Month'],['3months','Last 3 Months'],['custom','Custom Range']].map(([val, label]) => (
+        {[['month','This Month'],['lastmonth','Last Month'],['3months','Last 3 Months'],['custom','Custom Range']].map(([val, label]) => (
           <button key={val}
             style={{ ...styles.tab, ...(period === val ? styles.tabActive : {}) }}
             onClick={() => { setPeriod(val); if (val !== 'custom') onLoad(val, custom) }}>
