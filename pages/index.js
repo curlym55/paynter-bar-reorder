@@ -990,7 +990,7 @@ ${orderItems.length === 0 ? '<p style="color:#6b7280;margin-top:16px">No items t
             </div>
           </div>
           {/* Mobile dropdown — simple block below header, no fixed/absolute */}
-          <div className="mobile-nav" style={{ display: menuOpen ? 'block' : 'none', background: '#1e293b', borderTop: '1px solid #334155' }}>
+          <div style={{ display: menuOpen ? 'block' : 'none', background: '#1e293b', borderTop: '1px solid #334155' }}>
             {[
               { label: '🏠 Home',                action: () => setMainTab('home'),        active: mainTab === 'home' },
               { label: '📊 Sales Report',        action: () => { const n = mainTab==='sales'?'reorder':'sales'; setMainTab(n); if(n==='sales'&&!salesReport) loadSalesReport(salesPeriod,salesCustom) }, active: mainTab === 'sales' },
