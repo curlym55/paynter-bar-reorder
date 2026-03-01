@@ -1037,7 +1037,6 @@ ${orderItems.length === 0 ? '<p style="color:#6b7280;margin-top:16px">No items t
               <span style={styles.statLabel}>To Order</span>
             </div>
             <div className="stat-cell" style={{ ...styles.stat, borderTopColor: '#f59e0b' }}>
-              <span style={styles.statLabel}>Target Weeks</span>
               {editingTarget ? (
                 <input type="number" defaultValue={targetWeeks} style={styles.targetInput}
                   onBlur={e => saveTargetWeeks(e.target.value)}
@@ -1047,6 +1046,7 @@ ${orderItems.length === 0 ? '<p style="color:#6b7280;margin-top:16px">No items t
                 <span style={{ ...styles.statNum, color: '#f59e0b', cursor: 'pointer', textDecoration: 'underline dotted' }}
                   onClick={() => setEditingTarget(true)} title="Click to edit">{targetWeeks}</span>
               )}
+              <span style={styles.statLabel}>Target Weeks</span>
             </div>
           </div>
         </header>
