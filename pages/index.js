@@ -971,8 +971,8 @@ ${orderItems.length === 0 ? '<p style="color:#6b7280;margin-top:16px">No items t
                 {readOnly && <span style={{ fontSize: 11, color: '#94a3b8', alignSelf: 'center' }}>👁 View only</span>}
               </div>
 
-              {/* Mobile nav — hamburger */}
-              <div className="mobile-nav" style={{ position: 'relative' }}>
+              {/* Mobile nav — hamburger button only; dropdown rendered outside header below */}
+              <div className="mobile-nav">
                 <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                   {readOnly && <span style={{ fontSize: 10, color: '#94a3b8' }}>👁</span>}
                   <button style={{ ...styles.btn, ...(refreshing ? styles.btnDisabled : {}), padding: '8px 12px' }} onClick={() => loadItems(true)} disabled={refreshing}>{refreshing ? '...' : '🔄'}</button>
@@ -981,32 +981,6 @@ ${orderItems.length === 0 ? '<p style="color:#6b7280;margin-top:16px">No items t
                     {menuOpen ? '✕' : '☰'}
                   </button>
                 </div>
-                {menuOpen && (
-                  <div style={{ position: 'fixed', right: 12, top: 70, background: '#1e293b', borderRadius: 12, boxShadow: '0 8px 32px rgba(0,0,0,0.4)', zIndex: 1000, width: 'calc(100vw - 24px)', maxWidth: 320, overflow: 'hidden' }}>
-                    {[
-                      { label: '🏠 Home',          action: () => setMainTab('home'),        active: mainTab === 'home' },
-                      { label: '📊 Sales Report',  action: () => { const n = mainTab === 'sales' ? 'reorder' : 'sales'; setMainTab(n); if (n === 'sales' && !salesReport) loadSalesReport(salesPeriod, salesCustom) }, active: mainTab === 'sales' },
-                      { label: '📈 Trends',         action: () => { const n = mainTab === 'trends' ? 'reorder' : 'trends'; setMainTab(n); if (n === 'trends' && !trendData) loadTrendData() }, active: mainTab === 'trends' },
-                      { label: '🏆 Best & Worst Sellers', action: () => { const n = mainTab === 'bestsellers' ? 'reorder' : 'bestsellers'; setMainTab(n); if (n === 'bestsellers') loadSellersData() }, active: mainTab === 'bestsellers' },
-                      { label: '🏷️ Price List',     action: () => setMainTab(t => t === 'pricelist' ? 'reorder' : 'pricelist'), active: mainTab === 'pricelist' },
-                      { label: '🗑️ Wastage Log',    action: () => { const n = mainTab === 'wastage' ? 'reorder' : 'wastage'; setMainTab(n); if (n === 'wastage' && !wastageLoaded) loadWastageLog() }, active: mainTab === 'wastage' },
-                      { label: '📝 Notes',           action: () => { const n = mainTab === 'notes' ? 'reorder' : 'notes'; setMainTab(n); if (n === 'notes' && !notesLoaded) loadNotes() }, active: mainTab === 'notes' },
-                      { label: '❓ Help',             action: () => setMainTab(t => t === 'help' ? 'reorder' : 'help'), active: mainTab === 'help' },
-                      { label: '👥 Roster',          action: () => window.open('https://paynter-bar-roster.vercel.app/', '_blank'), active: false },
-                    ].map(({ label, action, active }) => (
-                      <button key={label} onClick={() => { action(); setMenuOpen(false) }}
-                        style={{ display: 'block', width: '100%', textAlign: 'left', background: active ? '#2d4a6e' : 'transparent',
-                          color: active ? '#60a5fa' : '#e2e8f0', border: 'none', padding: '14px 20px', fontSize: 15,
-                          fontWeight: active ? 700 : 400, cursor: 'pointer', borderBottom: '1px solid #2d3748' }}>
-                        {label}
-                      </button>
-                    ))}
-                    <div style={{ padding: '10px 12px', display: 'flex', gap: 8, borderTop: '1px solid #475569' }}>
-                      <button style={{ ...styles.btn, background: '#0e7490', flex: 1, fontSize: 12 }} onClick={() => { generateStockReport(); setMenuOpen(false) }}>📋 SOH PDF</button>
-                      <button style={{ ...styles.btn, background: '#065f46', flex: 1, fontSize: 12 }} onClick={() => { generateSalesReport(); setMenuOpen(false) }}>📈 Sales PDF</button>
-                    </div>
-                  </div>
-                )}
               </div>
             </div>
           </div>
@@ -1037,6 +1011,45 @@ ${orderItems.length === 0 ? '<p style="color:#6b7280;margin-top:16px">No items t
             </div>
           </div>
         </header>
+
+        {/* Mobile dropdown menu — rendered outside header to avoid clipping */}
+        {menuOpen && (
+          <div className="mobile-nav" onClick={() => setMenuOpen(false)}
+            style={{ position: 'fixed', inset: 0, zIndex: 999, background: 'rgba(0,0,0,0.5)' }}>
+            <div onClick={e => e.stopPropagation()}
+              style={{ position: 'absolute', top: 0, right: 0, bottom: 0, width: 280, background: '#1e293b', overflowY: 'auto', boxShadow: '-4px 0 24px rgba(0,0,0,0.4)' }}>
+              <div style={{ padding: '16px 20px', borderBottom: '1px solid #334155', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <span style={{ fontSize: 14, fontWeight: 700, color: '#e2e8f0' }}>Menu</span>
+                <button onClick={() => setMenuOpen(false)} style={{ background: 'none', border: 'none', color: '#94a3b8', fontSize: 20, cursor: 'pointer' }}>✕</button>
+              </div>
+              {[
+                { label: '🏠 Home',                action: () => setMainTab('home'),        active: mainTab === 'home' },
+                { label: '📊 Sales Report',        action: () => { const n = mainTab === 'sales' ? 'reorder' : 'sales'; setMainTab(n); if (n === 'sales' && !salesReport) loadSalesReport(salesPeriod, salesCustom) }, active: mainTab === 'sales' },
+                { label: '📈 Trends',               action: () => { const n = mainTab === 'trends' ? 'reorder' : 'trends'; setMainTab(n); if (n === 'trends' && !trendData) loadTrendData() }, active: mainTab === 'trends' },
+                { label: '🏆 Best & Worst Sellers', action: () => { const n = mainTab === 'bestsellers' ? 'reorder' : 'bestsellers'; setMainTab(n); if (n === 'bestsellers') loadSellersData() }, active: mainTab === 'bestsellers' },
+                { label: '🏷️ Price List',           action: () => setMainTab(t => t === 'pricelist' ? 'reorder' : 'pricelist'), active: mainTab === 'pricelist' },
+                { label: '🗑️ Wastage Log',          action: () => { const n = mainTab === 'wastage' ? 'reorder' : 'wastage'; setMainTab(n); if (n === 'wastage' && !wastageLoaded) loadWastageLog() }, active: mainTab === 'wastage' },
+                { label: '📝 Notes',                 action: () => { const n = mainTab === 'notes' ? 'reorder' : 'notes'; setMainTab(n); if (n === 'notes' && !notesLoaded) loadNotes() }, active: mainTab === 'notes' },
+                { label: '❓ Help',                   action: () => setMainTab(t => t === 'help' ? 'reorder' : 'help'), active: mainTab === 'help' },
+                { label: '👥 Roster',                action: () => window.open('https://paynter-bar-roster.vercel.app/', '_blank'), active: false },
+              ].map(({ label, action, active }) => (
+                <button key={label} onClick={() => { action(); setMenuOpen(false) }}
+                  style={{ display: 'block', width: '100%', textAlign: 'left',
+                    background: active ? '#2d4a6e' : 'transparent',
+                    color: active ? '#60a5fa' : '#e2e8f0',
+                    border: 'none', borderBottom: '1px solid #2d3748',
+                    padding: '16px 20px', fontSize: 16,
+                    fontWeight: active ? 700 : 400, cursor: 'pointer' }}>
+                  {label}
+                </button>
+              ))}
+              <div style={{ padding: '12px 16px', display: 'flex', gap: 8, borderTop: '1px solid #475569', marginTop: 8 }}>
+                <button style={{ ...styles.btn, background: '#0e7490', flex: 1 }} onClick={() => { generateStockReport(); setMenuOpen(false) }}>📋 SOH PDF</button>
+                <button style={{ ...styles.btn, background: '#065f46', flex: 1 }} onClick={() => { generateSalesReport(); setMenuOpen(false) }}>📈 Sales PDF</button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {error && <div style={styles.errorBox}><strong>Error:</strong> {error}</div>}
 
