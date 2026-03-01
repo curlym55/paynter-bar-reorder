@@ -1394,7 +1394,7 @@ function WastageView({ items, log, readOnly, onRefresh }) {
   }
 
   return (
-    <div style={{ padding: '24px 32px', maxWidth: 960, margin: '0 auto' }}>
+    <div style={{ padding: '16px', maxWidth: 960, margin: '0 auto' }}>
 
       {/* Summary strip */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 10, marginBottom: 20 }}>
@@ -1530,10 +1530,11 @@ function WastageView({ items, log, readOnly, onRefresh }) {
             No wastage entries recorded yet.
           </div>
         ) : (
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+          <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
+          <table style={{ width: '100%', minWidth: 500, borderCollapse: 'collapse' }}>
             <thead>
               <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
-                {['Date','Item','Category','Qty','Reason','Note','By',''].map(h => (
+                {['Date','Item','Qty','Reason','Note','By',''].map(h => (
                   <th key={h} style={{ padding: '7px 12px', textAlign: h === 'Qty' ? 'center' : 'left', fontSize: 10, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{h}</th>
                 ))}
               </tr>
@@ -1547,7 +1548,6 @@ function WastageView({ items, log, readOnly, onRefresh }) {
                       {new Date(entry.date).toLocaleDateString('en-AU', { timeZone: 'Australia/Brisbane', day: 'numeric', month: 'short', year: 'numeric' })}
                     </td>
                     <td style={{ padding: '8px 12px', fontSize: 13, fontWeight: 600, color: '#0f172a' }}>{entry.itemName}</td>
-                    <td style={{ padding: '8px 12px', fontSize: 11, color: '#64748b' }}>{entry.category}</td>
                     <td style={{ padding: '8px 12px', textAlign: 'center', fontSize: 13, fontWeight: 700, fontFamily: 'monospace' }}>
                       {entry.qty} <span style={{ fontSize: 10, color: '#94a3b8' }}>{entry.unit}</span>
                     </td>
@@ -1567,6 +1567,7 @@ function WastageView({ items, log, readOnly, onRefresh }) {
               })}
             </tbody>
           </table>
+          </div>
         )}
       </div>
 
@@ -1864,15 +1865,11 @@ function isHidden(item) {
         <div>
           <div style={{ fontSize: 14, fontWeight: 700, color: '#0f172a' }}>Price List — From Square</div>
           <div style={{ fontSize: 11, color: '#64748b', marginTop: 2 }}>
-            {visibleCount} items shown on price list · Prices from Square unless overridden
+            {visibleCount} items · Prices from Square
           </div>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
-          {!readOnly && (
-            <div style={{ fontSize: 11, color: '#64748b', alignSelf: 'center', textAlign: 'right', maxWidth: 200 }}>
-              Click <strong>Shown/Hidden</strong> to include or exclude items from the price list
-            </div>
-          )}
+
           <button
             style={{ background: '#be185d', color: '#fff', border: 'none', borderRadius: 6, padding: '8px 18px', fontWeight: 700, fontSize: 13, cursor: 'pointer' }}
             onClick={() => onPrint(items, settings)}>
@@ -1891,8 +1888,7 @@ function isHidden(item) {
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead>
                 <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
-                  <th style={{ padding: '7px 14px', textAlign: 'left', fontSize: 10, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 600 }}>Display Name</th>
-                  <th style={{ padding: '7px 14px', textAlign: 'left', fontSize: 10, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 600 }}>Square Name</th>
+                  <th style={{ padding: '7px 14px', textAlign: 'left', fontSize: 10, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 600 }}>Item</th>
                   <th style={{ padding: '7px 14px', textAlign: 'right', fontSize: 10, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 600 }}>Price</th>
 
                 </tr>
@@ -1901,17 +1897,15 @@ function isHidden(item) {
                 {grouped[cat].filter(item => (item.onHand || 0) > 0 || isHidden(item)).map((item, idx) => {
                   const hidden  = isHidden(item)
                   const price   = getPrice(item)
-                  const rowBg   = hidden ? '#fafafa' : idx % 2 === 0 ? '#fff' : '#f8fafc'
+                  const rowBg   = idx % 2 === 0 ? '#fff' : '#f8fafc'
 
                   return (
-                    <tr key={item.name} style={{ background: rowBg, opacity: hidden ? 0.45 : 1 }}>
+                    <tr key={item.name} style={{ background: rowBg }}>
                       {/* Display name */}
                       <td style={{ padding: '7px 14px', fontSize: 13, color: '#0f172a' }}>
                         {item.name}
                       </td>
 
-                      {/* Square name */}
-                      <td style={{ padding: '7px 14px', fontSize: 11, color: '#94a3b8' }}>{item.name}</td>
 
                       {/* Price — from Square only */}
                       <td style={{ padding: '7px 14px', textAlign: 'right' }}>
