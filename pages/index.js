@@ -938,19 +938,24 @@ ${orderItems.length === 0 ? '<p style="color:#6b7280;margin-top:16px">No items t
           @media (max-width: 768px) {
             .desktop-nav { display: none  !important; }
             .mobile-nav  { display: block !important; }
+            .header-inner { padding: 12px 16px 10px !important; }
+            .header-title { font-size: 18px !important; }
+            .stats-bar    { padding: 0 16px !important; }
+            .stat-cell    { padding: 10px 14px !important; }
+            .stat-num     { font-size: 18px !important; }
           }
         `}</style>
       </Head>
       <div style={styles.page}>
         <header style={styles.header}>
-          <div style={styles.headerInner}>
+          <div className="header-inner" style={styles.headerInner}>
             <div>
               <div style={styles.headerTop}>
                 <span style={styles.logo}>PAYNTER BAR HUB</span>
                 {readOnly && <span style={{ fontSize: 10, background: '#fef9c3', color: '#854d0e', border: '1px solid #fde68a', borderRadius: 4, padding: '2px 7px', fontWeight: 700, letterSpacing: '0.05em' }}>READ ONLY</span>}
                 <span style={styles.logoSub}>GemLife Palmwoods</span>
               </div>
-              <h1 style={styles.title}>{mainTab === 'sales' ? 'Sales Report' : mainTab === 'trends' ? 'Quarterly Trends' : mainTab === 'help' ? 'Help & Guide' : mainTab === 'pricelist' ? 'Price List' : mainTab === 'bestsellers' ? 'Best & Worst Sellers' : mainTab === 'home' ? 'Dashboard' : 'Reorder Planner'}</h1>
+              <h1 className="header-title" style={styles.title}>{mainTab === 'sales' ? 'Sales Report' : mainTab === 'trends' ? 'Quarterly Trends' : mainTab === 'help' ? 'Help & Guide' : mainTab === 'pricelist' ? 'Price List' : mainTab === 'bestsellers' ? 'Best & Worst Sellers' : mainTab === 'home' ? 'Dashboard' : 'Reorder Planner'}</h1>
             </div>
             <div style={styles.headerRight}>
               {lastUpdated && <span style={styles.lastUpdated}>Updated {new Date(lastUpdated).toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit' })}</span>}
@@ -984,20 +989,20 @@ ${orderItems.length === 0 ? '<p style="color:#6b7280;margin-top:16px">No items t
               </div>
             </div>
           </div>
-          <div style={styles.statsBar}>
+          <div className="stats-bar" style={styles.statsBar}>
             <div style={styles.stat}>
-              <span style={styles.statNum}>{items.length}</span>
+              <span className="stat-num" style={styles.statNum}>{items.length}</span>
               <span style={styles.statLabel}>Total Items</span>
             </div>
-            <div style={{ ...styles.stat, borderTopColor: '#dc2626' }}>
+            <div className="stat-cell" style={{ ...styles.stat, borderTopColor: '#dc2626' }}>
               <span style={{ ...styles.statNum, color: '#dc2626' }}>{critCount}</span>
               <span style={styles.statLabel}>Critical</span>
             </div>
-            <div style={{ ...styles.stat, borderTopColor: '#2563eb' }}>
+            <div className="stat-cell" style={{ ...styles.stat, borderTopColor: '#2563eb' }}>
               <span style={{ ...styles.statNum, color: '#2563eb' }}>{orderCount}</span>
               <span style={styles.statLabel}>To Order</span>
             </div>
-            <div style={{ ...styles.stat, borderTopColor: '#f59e0b' }}>
+            <div className="stat-cell" style={{ ...styles.stat, borderTopColor: '#f59e0b' }}>
               <span style={styles.statLabel}>Target Weeks</span>
               {editingTarget ? (
                 <input type="number" defaultValue={targetWeeks} style={styles.targetInput}
@@ -2705,19 +2710,19 @@ const styles = {
   loadBox:       { textAlign: 'center' },
   spinner:       { width: 40, height: 40, border: '3px solid #e2e8f0', borderTop: '3px solid #1f4e79', borderRadius: '50%', animation: 'spin 1s linear infinite', margin: '0 auto' },
   header:        { background: '#0f172a', color: '#fff' },
-  headerInner:   { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '24px 32px 16px', flexWrap: 'wrap', gap: 16 },
+  headerInner:   { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 24px 12px', flexWrap: 'wrap', gap: 12 },
   headerTop:     { display: 'flex', alignItems: 'center', gap: 12, marginBottom: 4 },
-  logo:          { fontSize: 11, fontWeight: 700, letterSpacing: '0.2em', color: '#94a3b8', textTransform: 'uppercase', fontFamily: "'IBM Plex Mono', monospace" },
-  logoSub:       { fontSize: 11, color: '#475569', fontFamily: "'IBM Plex Mono', monospace" },
-  title:         { fontSize: 26, fontWeight: 700, margin: 0, color: '#f8fafc', letterSpacing: '-0.02em' },
+  logo:          { fontSize: 11, fontWeight: 700, letterSpacing: '0.2em', color: '#cbd5e1', textTransform: 'uppercase', fontFamily: "'IBM Plex Mono', monospace" },
+  logoSub:       { fontSize: 11, color: '#94a3b8', fontFamily: "'IBM Plex Mono', monospace" },
+  title:         { fontSize: 22, fontWeight: 700, margin: 0, color: '#ffffff', letterSpacing: '-0.02em' },
   headerRight:   { display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 8 },
-  lastUpdated:   { fontSize: 12, color: '#64748b', fontFamily: "'IBM Plex Mono', monospace" },
+  lastUpdated:   { fontSize: 12, color: '#94a3b8', fontFamily: "'IBM Plex Mono', monospace" },
   btn:           { background: '#2563eb', color: '#fff', border: 'none', borderRadius: 6, padding: '8px 18px', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: "'IBM Plex Sans', sans-serif" },
   btnDisabled:   { background: '#334155', cursor: 'not-allowed' },
-  statsBar:      { display: 'flex', borderTop: '1px solid #1e293b', padding: '0 32px' },
-  stat:          { display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '12px 24px', borderRight: '1px solid #1e293b', gap: 2, borderTopWidth: 3, borderTopStyle: 'solid', borderTopColor: 'transparent' },
+  statsBar:      { display: 'flex', borderTop: '1px solid #334155', padding: '0 32px' },
+  stat:          { display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '12px 24px', borderRight: '1px solid #334155', gap: 2, borderTopWidth: 3, borderTopStyle: 'solid', borderTopColor: 'transparent' },
   statNum:       { fontSize: 22, fontWeight: 700, fontFamily: "'IBM Plex Mono', monospace", color: '#f8fafc' },
-  statLabel:     { fontSize: 11, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.08em' },
+  statLabel:     { fontSize: 11, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.08em' },
   targetInput:   { width: 50, fontSize: 20, fontWeight: 700, fontFamily: "'IBM Plex Mono', monospace", background: '#1e293b', color: '#f8fafc', border: '1px solid #475569', borderRadius: 4, textAlign: 'center', padding: '2px 4px' },
   errorBox:      { background: '#fee2e2', border: '1px solid #fca5a5', color: '#991b1b', margin: '16px 32px', padding: '12px 16px', borderRadius: 6, fontSize: 13 },
   controls:      { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 32px', background: '#fff', borderBottom: '1px solid #e2e8f0', flexWrap: 'wrap', gap: 12 },
