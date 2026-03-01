@@ -935,14 +935,19 @@ ${orderItems.length === 0 ? '<p style="color:#6b7280;margin-top:16px">No items t
         <style>{`
           .desktop-nav { display: flex !important; }
           .mobile-nav  { display: none  !important; }
+          .dash-stats   { grid-template-columns: repeat(4, 1fr) !important; }
+          .dash-features { grid-template-columns: repeat(4, 1fr) !important; }
           @media (max-width: 768px) {
-            .desktop-nav { display: none  !important; }
-            .mobile-nav  { display: block !important; }
+            .desktop-nav  { display: none  !important; }
+            .mobile-nav   { display: block !important; }
             .header-inner { padding: 12px 16px 10px !important; }
             .header-title { font-size: 18px !important; }
             .stats-bar    { padding: 0 16px !important; }
             .stat-cell    { padding: 10px 14px !important; }
             .stat-num     { font-size: 18px !important; }
+            .dash-stats   { grid-template-columns: repeat(2, 1fr) !important; }
+            .dash-features { grid-template-columns: repeat(2, 1fr) !important; }
+            .dash-wrap { padding: 12px 12px !important; }
           }
         `}</style>
       </Head>
@@ -1606,10 +1611,10 @@ function DashboardView({ items, lastUpdated, onNav }) {
   ]
 
   return (
-    <div style={{ padding: '20px 32px', maxWidth: 1100, margin: '0 auto' }}>
+    <div className="dash-wrap" style={{ padding: '20px 32px', maxWidth: 1100, margin: '0 auto' }}>
 
       {/* Compact header row: stats + refresh */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 10, marginBottom: 20 }}>
+      <div className="dash-stats" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 10, marginBottom: 20 }}>
         {[
           { label: 'Critical',      value: critCount,    sub: 'below target',    color: '#dc2626', bg: '#fef2f2', action: () => onNav('reorder') },
           { label: 'Low Stock',     value: lowCount,     sub: 'running low',     color: '#d97706', bg: '#fffbeb', action: () => onNav('reorder') },
@@ -1622,14 +1627,14 @@ function DashboardView({ items, lastUpdated, onNav }) {
             onMouseEnter={e => { if (action) e.currentTarget.style.opacity = '0.85' }}
             onMouseLeave={e => { e.currentTarget.style.opacity = '1' }}>
             <div style={{ fontSize: 9, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 3 }}>{label}</div>
-            <div style={{ fontSize: 22, fontWeight: 800, color, fontFamily: 'IBM Plex Mono, monospace', lineHeight: 1 }}>{value}</div>
+            <div style={{ fontSize: 20, fontWeight: 800, color, fontFamily: 'IBM Plex Mono, monospace', lineHeight: 1.1, wordBreak: 'break-word' }}>{value}</div>
             <div style={{ fontSize: 10, color: '#94a3b8', marginTop: 2 }}>{sub}</div>
           </div>
         ))}
       </div>
 
       {/* Feature grid — 4 columns */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
+      <div className="dash-features" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
         {features.map(f => (
           <div key={f.tab}
             onClick={() => f.external ? window.open('https://paynter-bar-roster.vercel.app/', '_blank') : onNav(f.tab)}
