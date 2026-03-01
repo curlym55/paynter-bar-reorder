@@ -982,7 +982,7 @@ ${orderItems.length === 0 ? '<p style="color:#6b7280;margin-top:16px">No items t
                   </button>
                 </div>
                 {menuOpen && (
-                  <div style={{ position: 'absolute', right: 0, top: 'calc(100% + 8px)', background: '#1e293b', borderRadius: 12, boxShadow: '0 8px 32px rgba(0,0,0,0.4)', zIndex: 1000, minWidth: 220, overflow: 'hidden' }}>
+                  <div style={{ position: 'fixed', right: 12, top: 70, background: '#1e293b', borderRadius: 12, boxShadow: '0 8px 32px rgba(0,0,0,0.4)', zIndex: 1000, width: 'calc(100vw - 24px)', maxWidth: 320, overflow: 'hidden' }}>
                     {[
                       { label: '🏠 Home',          action: () => setMainTab('home'),        active: mainTab === 'home' },
                       { label: '📊 Sales Report',  action: () => { const n = mainTab === 'sales' ? 'reorder' : 'sales'; setMainTab(n); if (n === 'sales' && !salesReport) loadSalesReport(salesPeriod, salesCustom) }, active: mainTab === 'sales' },
