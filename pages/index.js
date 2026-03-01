@@ -1019,7 +1019,7 @@ ${orderItems.length === 0 ? '<p style="color:#6b7280;margin-top:16px">No items t
 
         {/* Mobile dropdown menu — rendered outside header to avoid clipping */}
         {menuOpen && (
-          <div className="mobile-nav" onClick={() => setMenuOpen(false)}
+          <div onClick={() => setMenuOpen(false)}
             style={{ position: 'fixed', inset: 0, zIndex: 999, background: 'rgba(0,0,0,0.5)' }}>
             <div onClick={e => e.stopPropagation()}
               style={{ position: 'absolute', top: 0, right: 0, bottom: 0, width: 280, background: '#1e293b', overflowY: 'auto', boxShadow: '-4px 0 24px rgba(0,0,0,0.4)' }}>
